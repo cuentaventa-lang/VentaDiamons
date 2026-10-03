@@ -1,8 +1,0 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ventadiamons",
-  "compatibility_date": "2026-10-02",
-  "assets": {
-    "directory": "./public"
-  }
-}
