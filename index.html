@@ -202,9 +202,9 @@ function setCategory(c){state.category=c;renderStore()}
 function openModal(title,html){document.getElementById('modalBack').innerHTML=`<div class="modal"><div class="modalHead"><h3>${title}</h3><button class="close" onclick="closeModal()">×</button></div><div class="modalBody">${html}</div></div>`;document.getElementById('modalBack').classList.add('show')}
 function closeModal(){document.getElementById('modalBack').classList.remove('show');document.getElementById('modalBack').innerHTML=''}
 function startPurchase(id){const p=state.products.find(x=>x.id===id);if(!p)return;state.currentProduct=p;state.purchaseStep=1;state.selectedReceipt=null;renderPurchase()}
-function renderPurchase(){const p=state.currentProduct;if(!p)return;let body='';
+function renderPurchase(){const p=state.currentProduct;if(!p)return;var pay=(state.settings&&state.settings.payment)||{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'};let body='';
  const steps=`<div class="stepper"><span class="step ${state.purchaseStep===1?'active':''}">1 · Pago</span><span class="step ${state.purchaseStep===2?'active':''}">2 · Datos</span><span class="step ${state.purchaseStep===3?'active':''}">3 · Enviado</span></div>`;
- if(state.purchaseStep===1){body=`${steps}<div class="payBox"><div style="font-size:13px;font-weight:900">Orden: ${p.name}</div><div class="payRow"><span>Precio</span><b>${money(p.price)}</b></div><div class="payRow"><span>Método</span><b>Transferencia / depósito</b></div><div class="payRow"><span>Banco</span><b>Banco Demo</b></div><div class="payRow"><span>Beneficiario</span><b>TIENDA DIAMONDHUB</b></div><div class="payRow"><span>Cuenta / CLABE</span><b>0000 0000 0000 0000</b></div></div><div class="notice">Estos datos son de demostración. En producción se reemplazan por tus datos bancarios reales y se mostrarán según el método de pago configurado.</div><div class="modalActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="state.purchaseStep=2;renderPurchase()">Ya hice la transferencia →</button></div>`}
+ if(state.purchaseStep===1){body=`${steps}<div class="payBox"><div style="font-size:13px;font-weight:900">Orden: ${p.name}</div><div class="payRow"><span>Precio</span><b>${money(p.price)}</b></div><div class="payRow"><span>Método</span><b>Transferencia / depósito</b></div><div class="payRow"><span>Banco</span><b>${pay.bank}</b></div><div class="payRow"><span>Beneficiario</span><b>${pay.beneficiary}</b></div><div class="payRow"><span>Cuenta / CLABE</span><b>${pay.account}</b></div></div><div class="notice">${pay.instruction}</div><div class="modalActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="state.purchaseStep=2;renderPurchase()">Ya hice la transferencia →</button></div>`}
  else if(state.purchaseStep===2){body=`${steps}<div class="notice">Usa el ID exacto de tu cuenta de juego y adjunta el comprobante. El administrador revisará la operación.</div><div class="field"><label>Nombre</label><input id="buyName" placeholder="Tu nombre" value="${localStorage.getItem('dh_logged_name')||''}"></div><div class="field"><label>Correo</label><input id="buyEmail" type="email" placeholder="correo@ejemplo.com" value="${localStorage.getItem('dh_logged_email')||''}"></div><div class="field"><label>ID de Free Fire</label><input id="playerId" inputmode="numeric" placeholder="Ej. 123456789"></div><div class="filebox">Comprobante de depósito<br><input id="receipt" type="file" accept="image/*,.pdf" onchange="previewReceipt(event)"><img id="receiptPreview" class="uploadPreview"></div><div class="modalActions"><button class="secondary" onclick="state.purchaseStep=1;renderPurchase()">← Atrás</button><button class="primary" onclick="submitPurchase()">Enviar compra</button></div>`}
  else {body=`${steps}<div style="text-align:center;padding:12px 5px 18px"><div style="font-size:44px;margin-bottom:8px">✓</div><h3 style="margin:0 0 8px">Solicitud enviada</h3><p style="color:var(--muted);font-size:13px;line-height:1.6">Tu solicitud fue registrada. En la versión conectada, el administrador recibirá una alerta de Telegram y la compra aparecerá automáticamente en su panel.</p><div class="payBox" style="text-align:left;margin-top:15px"><div class="payRow"><span>Pedido</span><b>${state.lastOrder||'DH-XXXX'}</b></div><div class="payRow"><span>Producto</span><b>${p.name}</b></div><div class="payRow"><span>Total</span><b>${money(p.price)}</b></div></div><div class="modalActions"><button class="primary" onclick="closeModal()">Cerrar</button></div></div>`}
  openModal('Comprar · '+p.name,body)}
@@ -243,7 +243,7 @@ renderStore();refreshAccount();
 <script>
 const ADMIN_EMAIL='admin@diamondhub.local';
 const ADMIN_PASS='CambiarMe!2026';
-if(!state.settings){state.settings={socials:{instagram:'https://instagram.com/',facebook:'https://facebook.com/',telegram:'https://t.me/',whatsapp:'https://wa.me/'},socialLabel:'Soporte y novedades',socialText:'Contáctanos por cualquiera de nuestras redes.'}}
+if(!state.settings){state.settings={socials:{instagram:'https://instagram.com/',facebook:'https://facebook.com/',telegram:'https://t.me/',whatsapp:'https://wa.me/'},socialLabel:'Soporte y novedades',socialText:'Contáctanos por cualquiera de nuestras redes.',payment:{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'}}}
 if(!state.notifications)state.notifications=[];
 state.users=state.users.map(function(u){return Object.assign({},u,{username:u.username||u.email.split('@')[0]})});
 save();
@@ -272,10 +272,196 @@ function saveProduct(id){var obj={id:id||Date.now(),name:document.getElementById
 function markNotificationsRead(){state.notifications=state.notifications.map(function(n){return Object.assign({},n,{read:true})});save();renderAdmin();showToast('Notificaciones marcadas como leídas.')}
 function installSocialBanner(){if(document.getElementById('socialBanner'))return;var footer=document.querySelector('#storeView .footer');if(!footer)return;var b=document.createElement('section');b.id='socialBanner';b.className='container socialBanner';b.innerHTML='<div><h3>'+state.settings.socialLabel+'</h3><p>'+state.settings.socialText+'</p></div><div class="socialLinks"><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.instagram+'">Instagram</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.facebook+'">Facebook</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.telegram+'">Telegram</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.whatsapp+'">WhatsApp</a></div>';footer.parentNode.insertBefore(b,footer)}
 function saveSocialSettings(){state.settings.socials={instagram:document.getElementById('socialInstagram').value.trim()||'#',facebook:document.getElementById('socialFacebook').value.trim()||'#',telegram:document.getElementById('socialTelegram').value.trim()||'#',whatsapp:document.getElementById('socialWhatsapp').value.trim()||'#'};state.settings.socialLabel=document.getElementById('socialLabel').value.trim()||'Soporte y novedades';state.settings.socialText=document.getElementById('socialText').value.trim()||'Contáctanos por cualquiera de nuestras redes.';save();if(document.getElementById('socialBanner'))document.getElementById('socialBanner').remove();installSocialBanner();showToast('Redes sociales actualizadas.')}
-function settingsHTML(){return '<div class="adminTop"><div><h1>Configuración</h1><p>Telegram, redes y datos de pago.</p></div></div><div class="panel"><div class="panelHead"><div><h3>Telegram</h3><p>Conexión preparada para el bot.</p></div><span class="status pending">BACKEND</span></div><div class="panelBody"><div class="notice">El token y el Chat ID deben configurarse en el servidor, no en el HTML público.</div><div class="formGrid"><div class="field"><label>Bot</label><input placeholder="@MiBot"></div><div class="field"><label>Chat ID</label><input placeholder="Configurado en servidor"></div></div></div></div><div class="panel"><div class="panelHead"><div><h3>Redes sociales</h3><p>Aparecen en el banner público.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Instagram</label><input id="socialInstagram" value="'+state.settings.socials.instagram+'"></div><div class="field"><label>Facebook</label><input id="socialFacebook" value="'+state.settings.socials.facebook+'"></div><div class="field"><label>Telegram</label><input id="socialTelegram" value="'+state.settings.socials.telegram+'"></div><div class="field"><label>WhatsApp</label><input id="socialWhatsapp" value="'+state.settings.socials.whatsapp+'"></div><div class="field"><label>Título del banner</label><input id="socialLabel" value="'+state.settings.socialLabel+'"></div><div class="field"><label>Texto del banner</label><input id="socialText" value="'+state.settings.socialText+'"></div></div><div class="formActions"><button class="primary" onclick="saveSocialSettings()">Guardar redes</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Pagos</h3><p>Datos que se muestran antes del comprobante.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Banco</label><input value="Banco Demo"></div><div class="field"><label>Beneficiario</label><input value="TIENDA DIAMONDHUB"></div><div class="field"><label>Cuenta / CLABE</label><input value="0000 0000 0000 0000"></div><div class="field"><label>Instrucción</label><input value="Realiza la transferencia y guarda el comprobante."></div></div></div></div>'}
+function savePaymentSettings(){state.settings.payment={bank:document.getElementById('payBank').value.trim()||'Banco Demo',beneficiary:document.getElementById('payBeneficiary').value.trim()||'TIENDA DIAMONDHUB',account:document.getElementById('payAccount').value.trim()||'0000 0000 0000 0000',instruction:document.getElementById('payInstruction').value.trim()||'Realiza la transferencia y guarda el comprobante.'};save();showToast('Datos de pago actualizados.')}
+function settingsHTML(){var pay=state.settings.payment||{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'};return '<div class="adminTop"><div><h1>Configuración</h1><p>Telegram, redes y datos de pago.</p></div></div><div class="panel"><div class="panelHead"><div><h3>Telegram</h3><p>Conexión preparada para el bot.</p></div><span class="status pending">BACKEND</span></div><div class="panelBody"><div class="notice">El token y el Chat ID deben configurarse en el servidor, no en el HTML público.</div><div class="formGrid"><div class="field"><label>Bot</label><input placeholder="@MiBot"></div><div class="field"><label>Chat ID</label><input placeholder="Configurado en servidor"></div></div></div></div><div class="panel"><div class="panelHead"><div><h3>Redes sociales</h3><p>Aparecen en el banner público.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Instagram</label><input id="socialInstagram" value="'+state.settings.socials.instagram+'"></div><div class="field"><label>Facebook</label><input id="socialFacebook" value="'+state.settings.socials.facebook+'"></div><div class="field"><label>Telegram</label><input id="socialTelegram" value="'+state.settings.socials.telegram+'"></div><div class="field"><label>WhatsApp</label><input id="socialWhatsapp" value="'+state.settings.socials.whatsapp+'"></div><div class="field"><label>Título del banner</label><input id="socialLabel" value="'+state.settings.socialLabel+'"></div><div class="field"><label>Texto del banner</label><input id="socialText" value="'+state.settings.socialText+'"></div></div><div class="formActions"><button class="primary" onclick="saveSocialSettings()">Guardar redes</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Pagos</h3><p>Estos datos se muestran en el paso de transferencia antes de subir el comprobante.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Banco</label><input id="payBank" value="'+pay.bank+'"></div><div class="field"><label>Beneficiario</label><input id="payBeneficiary" value="'+pay.beneficiary+'"></div><div class="field"><label>Cuenta / CLABE</label><input id="payAccount" value="'+pay.account+'"></div><div class="field"><label>Instrucción</label><input id="payInstruction" value="'+pay.instruction+'"></div></div><div class="formActions"><button class="primary" onclick="savePaymentSettings()">Guardar datos de pago</button></div></div></div>'}
 function renderStore(){var cats=['Todos'].concat(Array.from(new Set(state.products.map(function(p){return p.category}))));var catHtml=cats.map(function(c){var safe=String(c).replace(/'/g,"\\\\'");return '<button class="chip '+(state.category===c?'active':'')+'" data-category="'+safe+'" onclick="setCategory(this.dataset.category)">'+c+'</button>'}).join('');document.getElementById('categoryFilters').innerHTML=catHtml;var filtered=state.category==='Todos'?state.products:state.products.filter(function(p){return p.category===state.category});document.getElementById('productGrid').innerHTML=filtered.map(function(p){return '<article class="product"><div class="productVisual"><div class="miniDiamond"></div></div><div class="productBody"><div class="productTop"><div><div class="productName">'+p.name+'</div><div class="productMeta">'+((p.kind||'diamonds')==='account'?'Entrega de datos de acceso':'Entrega a ID de jugador')+'</div></div><span class="badge">'+(p.tag||'Oferta')+'</span></div><div class="productBottom"><div class="price">'+money(p.price)+'</div><button class="buy" onclick="startPurchase('+p.id+')">Comprar</button></div></div></article>'}).join('');installSocialBanner()}
 function setCategory(c){state.category=c;renderStore()}
-renderStore();refreshAccount();installSocialBanner();
+const SB_URL='https://wfbhmwxzdqifzydgltou.supabase.co';
+const SB_KEY='sb_publishable_xzYWTmy8ykox6nPgmfXH7g_-1LqirUa';
+const SB_HEADERS={'apikey':SB_KEY,'Content-Type':'application/json'};
+let sbSession=null;
+
+async function sbFetch(path,options={}){
+  const headers=Object.assign({},SB_HEADERS,options.headers||{});
+  if(sbSession&&sbSession.access_token)headers.Authorization='Bearer '+sbSession.access_token;
+  const r=await fetch(SB_URL+path,Object.assign({},options,{headers}));
+  const text=await r.text();
+  let data=null;
+  try{data=text?JSON.parse(text):null}catch(_){data=text}
+  if(!r.ok)throw new Error((data&&data.message)||data?.error_description||('HTTP '+r.status));
+  return data;
+}
+
+async function sbAuth(path,body){
+  const r=await fetch(SB_URL+'/auth/v1/'+path,{method:'POST',headers:SB_HEADERS,body:JSON.stringify(body)});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.msg||data.error_description||data.message||'Error de autenticación');
+  return data;
+}
+
+async function signUpSupabase(name,username,email,pass){
+  const data=await sbAuth('signup',{email,password:pass,data:{name,username}});
+  if(!data.access_token)throw new Error('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+  sbSession=data;
+  return data;
+}
+
+async function loginSupabase(identity,pass){
+  let email=identity;
+  if(!identity.includes('@')){
+    const rows=await sbFetch('/rest/v1/profiles?select=email&username=eq.'+encodeURIComponent(identity)+'&limit=1');
+    if(!rows.length)throw new Error('Usuario o contraseña incorrectos.');
+    email=rows[0].email;
+  }
+  const data=await sbAuth('token?grant_type=password',{email,password:pass});
+  sbSession=data;
+  localStorage.setItem('dh_access_token',data.access_token||'');
+  localStorage.setItem('dh_refresh_token',data.refresh_token||'');
+  return data;
+}
+
+async function loadSession(){
+  const access=localStorage.getItem('dh_access_token'),refresh=localStorage.getItem('dh_refresh_token');
+  if(access){sbSession={access_token:access,refresh_token:refresh};try{return await sbFetch('/auth/v1/user')}catch(_){}}
+  return null;
+}
+
+async function loadProfile(){
+  if(!sbSession?.user)return null;
+  const rows=await sbFetch('/rest/v1/profiles?select=id,name,username,email,role&id=eq.'+encodeURIComponent(sbSession.user.id)+'&limit=1');
+  return rows[0]||null;
+}
+
+async function loadProductsRemote(){
+  const rows=await sbFetch('/rest/v1/products?select=id,name,category,kind,diamonds,price,tag,active&active=eq.true&order=id.asc');
+  if(rows&&rows.length){
+    state.products=rows.map(p=>({id:p.id,name:p.name,category:p.category,kind:p.kind,diamonds:p.diamonds,price:Number(p.price),tag:p.tag}));
+    localStorage.setItem('dh_products',JSON.stringify(state.products));
+  }
+}
+
+async function ensureSeedProducts(){
+  const rows=await sbFetch('/rest/v1/products?select=id&limit=1');
+  if(rows.length)return;
+  for(const p of defaultProducts){
+    await sbFetch('/rest/v1/products',{method:'POST',body:JSON.stringify({name:p.name,category:p.category,kind:'diamonds',diamonds:p.diamonds,price:p.price,tag:p.tag,active:true})});
+  }
+}
+
+async function loadPaymentSettings(){
+  try{
+    const rows=await sbFetch('/rest/v1/store_settings?select=bank,beneficiary,account,payment_instruction,instagram,facebook,telegram,whatsapp,social_label,social_text&id=eq.1&limit=1');
+    if(rows[0]){
+      state.settings={payment:{bank:rows[0].bank,beneficiary:rows[0].beneficiary,account:rows[0].account,instruction:rows[0].payment_instruction},socials:{instagram:rows[0].instagram||'#',facebook:rows[0].facebook||'#',telegram:rows[0].telegram||'#',whatsapp:rows[0].whatsapp||'#'},socialLabel:rows[0].social_label||'Soporte y novedades',socialText:rows[0].social_text||'Contáctanos por cualquiera de nuestras redes.'};
+    }
+  }catch(_){}
+}
+
+async function loadMyOrders(){
+  if(!sbSession?.user)return [];
+  const rows=await sbFetch('/rest/v1/orders?select=id,product_name,amount,player_id,status,created_at,delivery_note,product_id&user_id=eq.'+encodeURIComponent(sbSession.user.id)+'&order=created_at.desc');
+  return rows.map(o=>({id:o.id.slice(0,8).toUpperCase(),date:new Date(o.created_at).toLocaleString('es-MX'),product:o.product_name,amount:Number(o.amount),player:o.player_id,status:o.status,deliveryNote:o.delivery_note||'',deliveryType:'diamonds'}));
+}
+
+function currentRemoteProfile(){return window.__dhProfile||null}
+
+function clearRemoteSession(){
+  sbSession=null;window.__dhProfile=null;
+  localStorage.removeItem('dh_access_token');localStorage.removeItem('dh_refresh_token');localStorage.removeItem('dh_logged_name');localStorage.removeItem('dh_logged_email');
+  refreshAccount();
+}
+
+async function openLogin(message){
+  message=message||'';
+  openModal('Ingresar',(message?'<div class="notice">'+message+'</div>':'')+'<div class="field"><label>Usuario o correo</label><input id="loginIdentity" autocomplete="username" placeholder="Tu usuario o correo"></div><div class="field"><label>Contraseña</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Tu contraseña"></div><div class="modalActions"><button class="secondary" onclick="openRegister()">Registrarse</button><button class="primary" onclick="loginUser()">Ingresar</button></div>');
+}
+
+function openRegister(){
+  openModal('Crear cuenta','<div class="notice">La cuenta quedará almacenada en Supabase y podrás consultar tus pedidos desde cualquier dispositivo.</div><div class="formGrid"><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre completo"></div><div class="field"><label>Usuario</label><input id="regUsername" autocomplete="username" placeholder="Ej. pedro123"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" autocomplete="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>');
+}
+
+async function registerUser(){
+  const name=document.getElementById('regName').value.trim(),username=document.getElementById('regUsername').value.trim().toLowerCase(),email=document.getElementById('regEmail').value.trim().toLowerCase(),pass=document.getElementById('regPass').value;
+  if(!name||!username||!email||pass.length<8){showToast('Completa todos los campos y usa 8+ caracteres.');return}
+  try{
+    const existing=await sbFetch('/rest/v1/profiles?select=id&or=(username.eq.'+encodeURIComponent(username)+',email.eq.'+encodeURIComponent(email)+')&limit=1');
+    if(existing.length){showToast('Ese usuario o correo ya está registrado.');return}
+    await signUpSupabase(name,username,email,pass);
+    const profile=await loadProfile();
+    window.__dhProfile=profile;
+    localStorage.setItem('dh_logged_name',profile?.name||name);localStorage.setItem('dh_logged_email',profile?.email||email);
+    closeModal();refreshAccount();showToast('Cuenta creada correctamente.');
+  }catch(e){showToast(e.message||'No se pudo crear la cuenta.')}
+}
+
+async function loginUser(){
+  const identity=document.getElementById('loginIdentity').value.trim().toLowerCase(),pass=document.getElementById('loginPass').value;
+  try{
+    await loginSupabase(identity,pass);
+    const profile=await loadProfile();window.__dhProfile=profile;
+    localStorage.setItem('dh_logged_name',profile?.name||'');localStorage.setItem('dh_logged_email',profile?.email||'');
+    closeModal();refreshAccount();
+    if(profile?.role==='admin'){showAdmin();}else{showToast('Bienvenido, '+(profile?.name||identity).split(' ')[0]+'.')}
+  }catch(e){showToast(e.message||'Usuario o contraseña incorrectos.')}
+}
+
+function currentUser(){return currentRemoteProfile()}
+
+function refreshAccount(){
+  const u=currentRemoteProfile(),pill=document.getElementById('userpill');
+  if(u){pill.style.display='flex';pill.onclick=openAccount;pill.style.cursor='pointer';document.getElementById('avatar').textContent=(u.name||u.username||'D')[0].toUpperCase();document.getElementById('userNameLabel').textContent=u.username||u.name}
+  else{pill.style.display='none'}
+}
+
+async function logoutUser(){
+  try{await fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:Object.assign({},SB_HEADERS,{Authorization:'Bearer '+(sbSession?.access_token||'')})})}catch(_){}
+  clearRemoteSession();closeModal();showToast('Sesión cerrada.');
+}
+
+async function openAccount(){
+  const u=currentRemoteProfile();if(!u){openLogin();return}
+  let orders=[];try{orders=await loadMyOrders()}catch(_){showToast('No se pudieron cargar tus pedidos.')}
+  const content='<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+(u.name||u.username)+'</div><div class="orderMeta">@'+u.username+' · '+u.email+'</div></div><button class="iconBtn danger" onclick="logoutUser()">Cerrar sesión</button></div></div><div class="panel" style="margin-top:12px"><div class="panelHead"><div><h3>Mis compras</h3><p>Historial guardado en Supabase.</p></div></div><div class="panelBody">'+(orders.length?'<div class="accountOrders">'+orders.map(function(s){return orderCardHTML(s)}).join('')+'</div>':'<div class="empty">Todavía no tienes compras registradas.</div>')+'</div></div>';
+  openModal('Mi cuenta',content);
+}
+
+async function startPurchase(id){
+  const p=state.products.find(x=>x.id===id);if(!p)return;
+  if(!currentUser()){await openLogin('<b>Inicia sesión</b> para que tu pedido quede ligado a tu cuenta y puedas consultarlo desde cualquier dispositivo.');return}
+  state.currentProduct=p;state.purchaseStep=1;state.selectedReceipt=null;state.selectedReceiptDataUrl='';renderPurchase();
+}
+
+async function submitPurchase(){
+  const u=currentUser(),player=document.getElementById('playerId').value.trim();
+  if(!u||!player||!state.selectedReceipt){showToast('Completa tu ID y adjunta el comprobante.');return}
+  try{
+    const p=state.currentProduct;
+    const rows=await sbFetch('/rest/v1/orders?select=id&user_id=eq.'+encodeURIComponent(u.id)+'&limit=1');
+    const order=await sbFetch('/rest/v1/orders',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({user_id:u.id,product_id:p.id,product_name:p.name,amount:p.price,player_id:player,status:'Pendiente',receipt_name:state.selectedReceipt})});
+    const created=order?.[0];state.lastOrder=created?.id?created.id.slice(0,8).toUpperCase():'PEDIDO';
+    await sbFetch('/rest/v1/notifications',{method:'POST',body:JSON.stringify({order_id:created?.id||null,type:'telegram',message:'Nueva compra '+state.lastOrder+': '+u.name+' · '+p.name+' · '+money(p.price),read:false})}).catch(()=>{});
+    state.purchaseStep=3;renderPurchase();showToast('Compra registrada en Supabase.');
+  }catch(e){showToast(e.message||'No se pudo registrar el pedido.')}
+}
+
+async function renderRemoteStore(){
+  try{
+    await loadPaymentSettings();
+    await ensureSeedProducts();
+    await loadProductsRemote();
+  }catch(e){console.warn('Supabase:',e)}
+  renderStore();installSocialBanner();refreshAccount();
+}
+
+async function bootDiamondHub(){
+  try{
+    await loadSession();
+    if(sbSession?.user)window.__dhProfile=await loadProfile();
+  }catch(_){clearRemoteSession()}
+  await renderRemoteStore();
+}
+
+bootDiamondHub();
 </script>
  </body>
  </html>
