@@ -304,7 +304,7 @@ async function signUpSupabase(name,username,email,pass){
   const r=await fetch(SB_URL+'/auth/v1/signup?redirect_to='+encodeURIComponent(redirectTo),{method:'POST',headers:SB_HEADERS,body:JSON.stringify({email,password:pass,data:{name,username}})});
   const data=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(data.msg||data.error_description||data.message||'No se pudo registrar la cuenta.');
-  if(!data.access_token)throw new Error('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+  if(!data.access_token)throw new Error('La cuenta se creó, pero Supabase todavía tiene activada la confirmación por correo.');
   sbSession=data;
   return data;
 }
@@ -380,18 +380,16 @@ async function openLogin(message){
 }
 
 function openRegister(){
-  openModal('Crear cuenta','<div class="notice">La cuenta quedará almacenada en Supabase y podrás consultar tus pedidos desde cualquier dispositivo.</div><div class="formGrid"><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre completo"></div><div class="field"><label>Usuario</label><input id="regUsername" autocomplete="username" placeholder="Ej. pedro123"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" autocomplete="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>');
+  openModal('Crear cuenta','<div class="notice">Tu correo debe ser válido y no estar registrado previamente. No necesitas confirmar el correo para empezar a usar tu cuenta.</div><div class="formGrid"><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre completo"></div><div class="field"><label>Usuario</label><input id="regUsername" autocomplete="username" placeholder="Ej. pedro123"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" autocomplete="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>');
 }
 
 async function registerUser(){
   const name=document.getElementById('regName').value.trim(),username=document.getElementById('regUsername').value.trim().toLowerCase(),email=document.getElementById('regEmail').value.trim().toLowerCase(),pass=document.getElementById('regPass').value;
   if(!name||!username||!email||pass.length<8){showToast('Completa todos los campos y usa 8+ caracteres.');return}
   try{
-    const existing=await sbFetch('/rest/v1/profiles?select=id&or=(username.eq.'+encodeURIComponent(username)+',email.eq.'+encodeURIComponent(email)+')&limit=1');
-    if(existing.length){showToast('Ese usuario o correo ya está registrado.');return}
     await signUpSupabase(name,username,email,pass);
     const profile=await loadProfile();
-    window.__dhProfile=profile;
+    window.__dhProfile=profile||{name:name,username:username,email:email,role:'customer',id:sbSession.user?.id};
     localStorage.setItem('dh_logged_name',profile?.name||name);localStorage.setItem('dh_logged_email',profile?.email||email);
     closeModal();refreshAccount();showToast('Cuenta creada correctamente.');
   }catch(e){showToast(e.message||'No se pudo crear la cuenta.')}
