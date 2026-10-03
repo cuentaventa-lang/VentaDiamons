@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DiamondHub — Tienda de Diamantes</title>
+<style>
+:root{
+  color-scheme: dark light;
+  --bg: light-dark(#070912,#070912);
+  --surface: light-dark(#111526,#101426);
+  --surface-2: light-dark(#171d32,#171d32);
+  --surface-3: light-dark(#202842,#202842);
+  --text: light-dark(#f4f6ff,#f4f6ff);
+  --muted: light-dark(#98a0bd,#98a0bd);
+  --border: light-dark(#2b3453,#2b3453);
+  --purple: #8b5cf6;
+  --purple-2: #6d38ed;
+  --cyan: #22d3ee;
+  --green: #38d996;
+  --yellow: #f8c451;
+  --red: #ff5c73;
+  --shadow: 0 18px 50px rgba(0,0,0,.32);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:#070912;color:var(--text)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.app{min-height:100vh;background:radial-gradient(circle at 12% 0%,rgba(139,92,246,.2),transparent 30%),radial-gradient(circle at 88% 4%,rgba(34,211,238,.12),transparent 24%),#070912}
+.container{max-width:1240px;margin:0 auto;padding:0 22px}
+.topbar{position:sticky;top:0;z-index:30;backdrop-filter:blur(18px);background:rgba(7,9,18,.77);border-bottom:1px solid rgba(255,255,255,.07)}
+.nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:850;letter-spacing:.2px}
+.brandmark{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--purple),var(--cyan));box-shadow:0 8px 24px rgba(139,92,246,.28);color:#fff;font-weight:900}
+.navlinks{display:flex;gap:7px;align-items:center}
+.navlinks button,.ghost{background:transparent;border:1px solid transparent;color:#cfd4e8;padding:10px 13px;border-radius:11px}
+.navlinks button:hover,.ghost:hover{background:rgba(255,255,255,.06);border-color:var(--border)}
+.navright{display:flex;align-items:center;gap:8px}
+.userpill{display:none;align-items:center;gap:8px;border:1px solid var(--border);background:rgba(255,255,255,.04);padding:8px 11px;border-radius:999px;font-size:13px}
+.avatar{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#2a9dff,#8b5cf6);font-weight:800}
+.primary{border:0;color:#fff;background:linear-gradient(135deg,var(--purple),var(--purple-2));padding:11px 15px;border-radius:12px;font-weight:800;box-shadow:0 8px 25px rgba(109,56,237,.25)}
+.primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.hero{padding:65px 0 34px}
+.heroGrid{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;align-items:stretch}
+.heroCard{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:26px;background:linear-gradient(145deg,rgba(24,27,50,.96),rgba(10,13,25,.95));padding:42px;box-shadow:var(--shadow)}
+.heroCard:before,.heroCard:after{content:"";position:absolute;border-radius:50%;filter:blur(8px);opacity:.55;pointer-events:none}
+.heroCard:before{width:220px;height:220px;background:rgba(139,92,246,.18);right:-50px;top:-80px}
+.heroCard:after{width:200px;height:200px;background:rgba(34,211,238,.09);left:-80px;bottom:-90px}
+.kicker{display:inline-flex;gap:7px;align-items:center;border:1px solid rgba(139,92,246,.35);background:rgba(139,92,246,.1);padding:7px 10px;border-radius:999px;color:#cfc1ff;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px}
+h1{font-size:clamp(38px,5vw,63px);line-height:.98;letter-spacing:-2.6px;margin:18px 0 16px;max-width:750px}
+.gradientText{background:linear-gradient(90deg,#fff,#cbbcff 48%,#7ce7f6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:#aeb6d0;max-width:670px;line-height:1.7;font-size:16px;margin:0 0 26px}
+.heroActions{display:flex;gap:10px;flex-wrap:wrap}
+.secondary{border:1px solid var(--border);color:#e9ecf8;background:rgba(255,255,255,.04);padding:11px 15px;border-radius:12px;font-weight:750}
+.secondary:hover{background:rgba(255,255,255,.08)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:25px;max-width:610px}
+.stat{padding:13px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.025);border-radius:15px}
+.stat b{display:block;font-size:17px}.stat span{color:var(--muted);font-size:12px}
+.promoHero{border:1px solid rgba(34,211,238,.16);border-radius:26px;background:linear-gradient(155deg,rgba(21,43,55,.75),rgba(13,17,29,.95));padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:320px;box-shadow:var(--shadow)}
+.promoImage{height:150px;border-radius:18px;background:radial-gradient(circle at 50% 45%,rgba(79,215,255,.45),transparent 24%),linear-gradient(135deg,#172a42,#241637 56%,#07141b);border:1px solid rgba(255,255,255,.08);display:grid;place-items:center;position:relative;overflow:hidden}
+.diamond{width:90px;height:90px;transform:rotate(45deg);background:linear-gradient(135deg,#fff, #7be5fa 50%,#7d4cff);border-radius:10px;box-shadow:0 0 55px rgba(34,211,238,.36)}
+.promoImage span{position:absolute;bottom:11px;right:12px;background:rgba(0,0,0,.45);padding:5px 8px;border-radius:8px;font-size:11px;color:#cbd4ea}
+.promoHero h3{font-size:23px;margin:17px 0 6px}.promoHero p{color:var(--muted);margin:0;font-size:13px;line-height:1.5}
+.section{padding:22px 0 42px}.sectionHead{display:flex;justify-content:space-between;gap:15px;align-items:end;margin-bottom:17px}.sectionHead h2{margin:0;font-size:25px}.sectionHead p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.filters{display:flex;gap:8px;flex-wrap:wrap}.chip{background:transparent;color:#abb4ce;border:1px solid var(--border);padding:8px 12px;border-radius:999px}.chip.active,.chip:hover{background:rgba(139,92,246,.14);border-color:rgba(139,92,246,.42);color:#eee7ff}
+.productGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.product{border:1px solid var(--border);background:linear-gradient(180deg,rgba(22,26,45,.96),rgba(13,16,29,.96));border-radius:18px;overflow:hidden;display:flex;flex-direction:column;min-height:250px;transition:.2s transform,.2s box-shadow,.2s border-color}.product:hover{transform:translateY(-3px);border-color:rgba(139,92,246,.45);box-shadow:0 15px 35px rgba(0,0,0,.24)}
+.productVisual{height:108px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,rgba(139,92,246,.17),transparent 45%),#11172a;border-bottom:1px solid rgba(255,255,255,.05)}
+.miniDiamond{width:51px;height:51px;transform:rotate(45deg);border-radius:8px;background:linear-gradient(135deg,#eafcff,#65d9ff 40%,#8059ff 88%);box-shadow:0 0 28px rgba(34,211,238,.25)}
+.productBody{padding:15px;display:flex;flex-direction:column;flex:1}.productTop{display:flex;justify-content:space-between;gap:10px;align-items:start}.productName{font-weight:850}.badge{font-size:10px;color:#d7caff;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.2);padding:5px 7px;border-radius:8px;font-weight:800}.productMeta{color:var(--muted);font-size:12px;margin-top:5px}.productBottom{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:15px}.price{font-size:19px;font-weight:900}.buy{padding:9px 12px;border:0;border-radius:10px;color:#fff;background:linear-gradient(135deg,#8b5cf6,#6d38ed);font-weight:800}
+.trust{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 24px}.trustBox{display:flex;gap:12px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:15px;background:rgba(255,255,255,.025)}.trustIcon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.15)}.trustBox b{font-size:13px}.trustBox span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.footer{padding:25px 0 36px;color:#737d9a;font-size:12px;text-align:center}
+/* modals and app pages */
+.modalBack{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(7px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}.modalBack.show{display:flex}
+.modal{width:min(680px,100%);max-height:92vh;overflow:auto;border:1px solid var(--border);border-radius:22px;background:#0e1220;box-shadow:0 30px 90px rgba(0,0,0,.5)}
+.modalHead{display:flex;justify-content:space-between;gap:15px;padding:19px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#0e1220;z-index:2}.modalHead h3{margin:0}.close{background:transparent;border:0;color:#95a0bb;font-size:24px}.modalBody{padding:20px}.stepper{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}.step{padding:7px 9px;border-radius:9px;border:1px solid var(--border);color:#79839f;font-size:11px;font-weight:800}.step.active{color:#eee7ff;border-color:rgba(139,92,246,.4);background:rgba(139,92,246,.12)}
+.payBox{border:1px solid rgba(34,211,238,.2);background:rgba(34,211,238,.04);padding:16px;border-radius:16px}.payRow{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}.payRow:last-child{border-bottom:0}.payRow span{color:var(--muted)}.notice{padding:10px 12px;border-radius:12px;background:rgba(248,196,81,.07);border:1px solid rgba(248,196,81,.16);color:#ebd99b;font-size:12px;line-height:1.5;margin:14px 0}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:13px}.field label{font-size:12px;color:#aeb7d0;font-weight:700}.field input,.field select,.field textarea{width:100%;border:1px solid var(--border);background:#0a0e1a;color:#f3f6ff;border-radius:11px;padding:11px 12px;outline:0}.field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(139,92,246,.55);box-shadow:0 0 0 3px rgba(139,92,246,.08)}.filebox{border:1px dashed #475170;border-radius:13px;padding:15px;text-align:center;color:#8f99b5;background:rgba(255,255,255,.02)}.filebox input{margin-top:9px}.modalActions{display:flex;justify-content:flex-end;gap:8px;margin-top:17px}.uploadPreview{max-width:180px;max-height:120px;display:none;border-radius:10px;margin:11px auto 0;border:1px solid var(--border)}
+/* admin */
+.adminWrap{display:none;min-height:100vh}.adminShell{display:grid;grid-template-columns:235px 1fr;min-height:100vh}.sidebar{border-right:1px solid var(--border);background:#0a0d18;padding:20px 14px;position:sticky;top:0;height:100vh}.sideBrand{display:flex;align-items:center;gap:10px;font-weight:900;padding:7px 9px 24px}.sideNav{display:grid;gap:5px}.sideNav button{border:1px solid transparent;background:transparent;color:#8f99b5;padding:11px 12px;border-radius:11px;text-align:left}.sideNav button.active,.sideNav button:hover{background:rgba(139,92,246,.11);border-color:rgba(139,92,246,.18);color:#eee7ff}.adminMain{padding:28px 28px 45px;overflow:hidden}.adminTop{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:24px}.adminTop h1{font-size:34px;letter-spacing:-1px;margin:0}.adminTop p{color:var(--muted);margin:7px 0 0}.adminActions{display:flex;gap:8px;flex-wrap:wrap}.metricGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}.metric{border:1px solid var(--border);background:linear-gradient(145deg,rgba(21,25,43,.9),rgba(10,13,22,.92));padding:16px;border-radius:17px}.metric span{font-size:11px;color:var(--muted)}.metric strong{display:block;font-size:25px;margin-top:7px}.metric small{color:#6dddb8;font-size:11px}.panel{border:1px solid var(--border);border-radius:18px;background:rgba(15,19,32,.88);margin-bottom:14px;overflow:hidden}.panelHead{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:16px 17px;border-bottom:1px solid var(--border)}.panelHead h3{margin:0;font-size:15px}.panelHead p{margin:4px 0 0;color:var(--muted);font-size:11px}.panelBody{padding:16px}.tableWrap{overflow:auto}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left;white-space:nowrap}.table th{color:#818ba6;font-size:10px;text-transform:uppercase;letter-spacing:.7px}.status{display:inline-flex;padding:5px 8px;border-radius:8px;font-size:10px;font-weight:800}.ok{color:#8bf0c9;background:rgba(56,217,150,.1)}.pending{color:#f4d883;background:rgba(248,196,81,.09)}.mutedStatus{color:#b5bdd3;background:rgba(255,255,255,.06)}.iconBtn{border:1px solid var(--border);background:transparent;color:#c6cde0;border-radius:9px;padding:7px 9px}.iconBtn:hover{background:rgba(255,255,255,.06)}.danger{color:#ff8ca0;border-color:rgba(255,92,115,.18)}
+.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.formActions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}.empty{padding:30px;text-align:center;color:var(--muted)}
+.bannerGrid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}.bannerCard{min-height:165px;border:1px solid var(--border);border-radius:17px;padding:18px;position:relative;overflow:hidden}.bannerCard .bannerVisual{position:absolute;inset:0;background:linear-gradient(135deg,rgba(139,92,246,.19),transparent 65%)}.bannerCard .content{position:relative;z-index:1;max-width:80%}.bannerCard h4{font-size:18px;margin:0 0 7px}.bannerCard p{color:var(--muted);font-size:12px;line-height:1.5}.bannerCard small{display:inline-flex;margin-top:7px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);color:#bcc4d9}
+.toast{position:fixed;bottom:20px;right:20px;display:none;z-index:80;background:#111727;border:1px solid var(--border);box-shadow:var(--shadow);padding:12px 14px;border-radius:12px;color:#e9ecf8;font-size:12px}.toast.show{display:block;animation:fade .18s ease-out}@keyframes fade{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.mobileOnly{display:none}
+.accountOrders{display:grid;gap:12px}.orderCard{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:16px;padding:15px}.orderTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.orderTitle{font-weight:850}.orderMeta{font-size:11px;color:var(--muted);margin-top:4px}.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:14px 0}.timelineStep{font-size:10px;text-align:center;padding:8px 5px;border:1px solid var(--border);border-radius:9px;color:#707b98}.timelineStep.done{color:#8bf0c9;border-color:rgba(56,217,150,.2);background:rgba(56,217,150,.06)}.timelineStep.current{color:#f4d883;border-color:rgba(248,196,81,.2);background:rgba(248,196,81,.06)}.deliveryBox{border:1px solid rgba(56,217,150,.2);background:rgba(56,217,150,.05);border-radius:14px;padding:13px;margin-top:12px}.deliveryBox input{background:#0a0e1a}.receiptThumb{max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--border);display:block;margin-top:8px}.adminOrderActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.secretField{position:relative}.secretField input{padding-right:72px}.copySecret{position:absolute;right:7px;bottom:7px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:#cdd4e7;border-radius:7px;padding:5px 7px;font-size:10px}.socialBanner{margin:10px auto 28px;border:1px solid rgba(139,92,246,.22);background:linear-gradient(120deg,rgba(139,92,246,.1),rgba(34,211,238,.055));border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:15px}.socialBanner h3{margin:0 0 4px;font-size:15px}.socialBanner p{margin:0;color:var(--muted);font-size:11px}.socialLinks{display:flex;gap:8px;flex-wrap:wrap}.socialLink{padding:8px 10px;border:1px solid var(--border);border-radius:10px;color:#dce1f0;text-decoration:none;background:rgba(255,255,255,.03);font-size:11px;font-weight:750}.socialLink:hover{background:rgba(255,255,255,.08)}
+@media(max-width:980px){.heroGrid{grid-template-columns:1fr}.productGrid{grid-template-columns:repeat(2,1fr)}.metricGrid{grid-template-columns:repeat(2,1fr)}.adminShell{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--border)}.sideNav{grid-template-columns:repeat(3,1fr)}.sideNav button{text-align:center}.adminMain{padding:21px 16px}.mobileOnly{display:inline-flex}.navlinks{display:none}}
+@media(max-width:650px){.container{padding:0 14px}.hero{padding-top:38px}.heroCard{padding:26px}.heroCard h1{font-size:42px}.stats,.trust,.productGrid,.metricGrid,.bannerGrid{grid-template-columns:1fr}.productGrid{gap:10px}.nav{height:68px}.adminTop{align-items:flex-start;flex-direction:column}.formGrid{grid-template-columns:1fr}.sideNav{grid-template-columns:1fr 1fr}.userpill{display:none}.navright .secondary{display:none}}
+</style>
+</head>
+<body>
+<div id="storeView" class="app">
+  <div class="topbar">
+    <div class="container nav">
+      <div class="brand"><div class="brandmark">◆</div><div>Diamond<span style="color:#9e84ff">Hub</span></div></div>
+      <div class="navlinks">
+        <button onclick="scrollToId('packs')">Diamantes</button>
+        <button onclick="scrollToId('promos')">Promociones</button>
+        <button onclick="openLogin()">Mi cuenta</button>
+      </div>
+      <div class="navright">
+        <div id="userpill" class="userpill"><div class="avatar" id="avatar">D</div><span id="userNameLabel">Mi cuenta</span></div>
+        <button class="secondary" onclick="openRegister()">Registrarse</button>
+        <button class="primary" onclick="openLogin()">Ingresar</button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section class="hero">
+      <div class="container heroGrid">
+        <div class="heroCard">
+          <span class="kicker">✦ Entrega rápida · Compra simple</span>
+          <h1>Diamantes de <span class="gradientText">Free Fire</span> sin vueltas.</h1>
+          <p>Selecciona tu paquete, revisa los datos de transferencia y envía tu comprobante. El proceso está pensado para comprar desde el celular en pocos pasos.</p>
+          <div class="heroActions">
+            <button class="primary" onclick="scrollToId('packs')">Ver paquetes</button>
+            <button class="secondary" onclick="openRegister()">Crear cuenta</button>
+          </div>
+          <div class="stats">
+            <div class="stat"><b>3 pasos</b><span>para completar una compra</span></div>
+            <div class="stat"><b>24/7</b><span>puedes enviar solicitudes</span></div>
+            <div class="stat"><b>Panel</b><span>historial de tus pedidos</span></div>
+          </div>
+        </div>
+        <div id="promos" class="promoHero">
+          <div class="promoImage"><div class="diamond"></div><span>Imagen promocional</span></div>
+          <div><div style="color:#83e9f8;font-size:11px;font-weight:900;letter-spacing:.8px;text-transform:uppercase">Promo de ejemplo</div><h3>Bonificación de temporada</h3><p>Este espacio puede mostrar tus flyers, promociones, noticias o banners cargados desde el panel de administrador.</p></div>
+          <button class="secondary" onclick="showToast('En la versión final, este banner puede enlazar a una promoción específica.')">Ver promoción</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="packs" class="section">
+      <div class="container">
+        <div class="trust">
+          <div class="trustBox"><div class="trustIcon">↯</div><div><b>Compra guiada</b><span>Todo por botones y pasos claros.</span></div></div>
+          <div class="trustBox"><div class="trustIcon">▣</div><div><b>Comprobante</b><span>Adjunta tu captura de pago.</span></div></div>
+          <div class="trustBox"><div class="trustIcon">✓</div><div><b>Seguimiento</b><span>Consulta tus pedidos desde tu cuenta.</span></div></div>
+        </div>
+        <div class="sectionHead"><div><h2>Elige tu paquete</h2><p>Los productos se pueden crear y modificar desde el panel de administrador.</p></div><div class="filters" id="categoryFilters"></div></div>
+        <div id="productGrid" class="productGrid"></div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">DiamondHub · Tienda digital independiente · No afiliado oficialmente con Garena/Free Fire.</footer>
+</div>
+
+<div id="adminView" class="adminWrap">
+  <div class="adminShell">
+    <aside class="sidebar">
+      <div class="sideBrand"><div class="brandmark">◆</div><span>DiamondHub Admin</span></div>
+      <div class="sideNav">
+        <button id="nav-dashboard" class="active" onclick="adminTab('dashboard')">▦ Dashboard</button>
+        <button id="nav-products" onclick="adminTab('products')">◇ Productos</button>
+        <button id="nav-sales" onclick="adminTab('sales')">▤ Ventas</button>
+        <button id="nav-promos" onclick="adminTab('promos')">✦ Promos</button>
+        <button id="nav-content" onclick="adminTab('content')">▧ Contenido</button>
+        <button id="nav-settings" onclick="adminTab('settings')">⚙ Configuración</button>
+        <button onclick="showStore()">↩ Ver tienda</button>
+      </div>
+    </aside>
+    <main class="adminMain">
+      <div id="adminContent"></div>
+    </main>
+  </div>
+</div>
+
+<div id="modalBack" class="modalBack" onclick="if(event.target===this)closeModal()"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+const defaultProducts=[
+ {id:1,category:'Diamantes',name:'100 Diamantes',diamonds:100,price:50,tag:'Popular'},
+ {id:2,category:'Diamantes',name:'310 Diamantes',diamonds:310,price:140,tag:'Ahorra'},
+ {id:3,category:'Diamantes',name:'520 Diamantes',diamonds:520,price:220,tag:'Popular'},
+ {id:4,category:'Diamantes',name:'1060 Diamantes',diamonds:1060,price:420,tag:'Mejor valor'},
+ {id:5,category:'Promos',name:'150 + bonus',diamonds:150,price:65,tag:'Promo'},
+ {id:6,category:'Promos',name:'520 + bonus',diamonds:520,price:235,tag:'Promo'}
+];
+const defaultSales=[
+ {id:'DH-1004',date:'03/10/2026 11:48',customer:'Luis M.',email:'luis@example.com',product:'310 Diamantes',amount:140,status:'Pendiente',player:'99887766'},
+ {id:'DH-1003',date:'03/10/2026 10:25',customer:'Andrea R.',email:'andrea@example.com',product:'100 Diamantes',amount:50,status:'Aprobada',player:'44332211'},
+ {id:'DH-1002',date:'02/10/2026 21:04',customer:'Carlos T.',email:'carlos@example.com',product:'1060 Diamantes',amount:420,status:'Aprobada',player:'55667788'},
+ {id:'DH-1001',date:'02/10/2026 18:51',customer:'Mariana P.',email:'mariana@example.com',product:'520 Diamantes',amount:220,status:'Aprobada',player:'11223344'}
+];
+const state={
+ products:JSON.parse(localStorage.getItem('dh_products')||'null')||defaultProducts,
+ sales:JSON.parse(localStorage.getItem('dh_sales')||'null')||defaultSales,
+ users:JSON.parse(localStorage.getItem('dh_users')||'null')||[],
+ category:'Todos', currentProduct:null, purchaseStep:1, selectedReceipt:null, adminTab:'dashboard'
+};
+function save(){localStorage.setItem('dh_products',JSON.stringify(state.products));localStorage.setItem('dh_sales',JSON.stringify(state.sales));localStorage.setItem('dh_users',JSON.stringify(state.users))}
+function money(v){return '$'+Number(v).toLocaleString('es-MX')}
+function scrollToId(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth'})}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2600)}
+function renderStore(){
+ const cats=['Todos',...new Set(state.products.map(p=>p.category))];
+ document.getElementById('categoryFilters').innerHTML=cats.map(c=>`<button class="chip ${state.category===c?'active':''}" onclick="setCategory('${c.replaceAll("'","\\'")}')">${c}</button>`).join('');
+ const filtered=state.category==='Todos'?state.products:state.products.filter(p=>p.category===state.category);
+ document.getElementById('productGrid').innerHTML=filtered.map(p=>`<article class="product"><div class="productVisual"><div class="miniDiamond"></div></div><div class="productBody"><div class="productTop"><div><div class="productName">${p.name}</div><div class="productMeta">Entrega a ID de jugador</div></div><span class="badge">${p.tag||'Oferta'}</span></div><div class="productBottom"><div class="price">${money(p.price)}</div><button class="buy" onclick="startPurchase(${p.id})">Comprar</button></div></div></article>`).join('');
+}
+function setCategory(c){state.category=c;renderStore()}
+function openModal(title,html){document.getElementById('modalBack').innerHTML=`<div class="modal"><div class="modalHead"><h3>${title}</h3><button class="close" onclick="closeModal()">×</button></div><div class="modalBody">${html}</div></div>`;document.getElementById('modalBack').classList.add('show')}
+function closeModal(){document.getElementById('modalBack').classList.remove('show');document.getElementById('modalBack').innerHTML=''}
+function startPurchase(id){const p=state.products.find(x=>x.id===id);if(!p)return;state.currentProduct=p;state.purchaseStep=1;state.selectedReceipt=null;renderPurchase()}
+function renderPurchase(){const p=state.currentProduct;if(!p)return;var pay=(state.settings&&state.settings.payment)||{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'};let body='';
+ const steps=`<div class="stepper"><span class="step ${state.purchaseStep===1?'active':''}">1 · Pago</span><span class="step ${state.purchaseStep===2?'active':''}">2 · Datos</span><span class="step ${state.purchaseStep===3?'active':''}">3 · Enviado</span></div>`;
+ if(state.purchaseStep===1){body=`${steps}<div class="payBox"><div style="font-size:13px;font-weight:900">Orden: ${p.name}</div><div class="payRow"><span>Precio</span><b>${money(p.price)}</b></div><div class="payRow"><span>Método</span><b>Transferencia / depósito</b></div><div class="payRow"><span>Banco</span><b>${pay.bank}</b></div><div class="payRow"><span>Beneficiario</span><b>${pay.beneficiary}</b></div><div class="payRow"><span>Cuenta / CLABE</span><b>${pay.account}</b></div></div><div class="notice">${pay.instruction}</div><div class="modalActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="state.purchaseStep=2;renderPurchase()">Ya hice la transferencia →</button></div>`}
+ else if(state.purchaseStep===2){body=`${steps}<div class="notice">Usa el ID exacto de tu cuenta de juego y adjunta el comprobante. El administrador revisará la operación.</div><div class="field"><label>Nombre</label><input id="buyName" placeholder="Tu nombre" value="${localStorage.getItem('dh_logged_name')||''}"></div><div class="field"><label>Correo</label><input id="buyEmail" type="email" placeholder="correo@ejemplo.com" value="${localStorage.getItem('dh_logged_email')||''}"></div><div class="field"><label>ID de Free Fire</label><input id="playerId" inputmode="numeric" placeholder="Ej. 123456789"></div><div class="filebox">Comprobante de depósito<br><input id="receipt" type="file" accept="image/*,.pdf" onchange="previewReceipt(event)"><img id="receiptPreview" class="uploadPreview"></div><div class="modalActions"><button class="secondary" onclick="state.purchaseStep=1;renderPurchase()">← Atrás</button><button class="primary" onclick="submitPurchase()">Enviar compra</button></div>`}
+ else {body=`${steps}<div style="text-align:center;padding:12px 5px 18px"><div style="font-size:44px;margin-bottom:8px">✓</div><h3 style="margin:0 0 8px">Solicitud enviada</h3><p style="color:var(--muted);font-size:13px;line-height:1.6">Tu solicitud fue registrada. En la versión conectada, el administrador recibirá una alerta de Telegram y la compra aparecerá automáticamente en su panel.</p><div class="payBox" style="text-align:left;margin-top:15px"><div class="payRow"><span>Pedido</span><b>${state.lastOrder||'DH-XXXX'}</b></div><div class="payRow"><span>Producto</span><b>${p.name}</b></div><div class="payRow"><span>Total</span><b>${money(p.price)}</b></div></div><div class="modalActions"><button class="primary" onclick="closeModal()">Cerrar</button></div></div>`}
+ openModal('Comprar · '+p.name,body)}
+function previewReceipt(e){const f=e.target.files?.[0];if(!f)return;state.selectedReceipt=f.name;const img=document.getElementById('receiptPreview');if(f.type.startsWith('image/')){const r=new FileReader();r.onload=ev=>{img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f)}}
+function submitPurchase(){const name=document.getElementById('buyName').value.trim(),email=document.getElementById('buyEmail').value.trim(),player=document.getElementById('playerId').value.trim();if(!name||!email||!player||!state.selectedReceipt){showToast('Completa nombre, correo, ID y comprobante.');return}const id='DH-'+Math.floor(1000+Math.random()*8999);state.lastOrder=id;state.sales.unshift({id,date:new Date().toLocaleString('es-MX'),customer:name,email,product:state.currentProduct.name,amount:state.currentProduct.price,status:'Pendiente',player});save();simulateTelegram({id,name,email,player,product:state.currentProduct.name,amount:state.currentProduct.price});state.purchaseStep=3;renderPurchase()}
+function simulateTelegram(s){console.log('TELEGRAM SIMULADO',s);showToast('Compra registrada y alerta de Telegram simulada.')}
+function openRegister(){openModal('Crear cuenta',`<div class="notice">La cuenta te permite guardar tus datos y consultar tus compras. La contraseña real debe manejarse con autenticación segura en el backend.</div><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" placeholder="Mínimo 8 caracteres"></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>`)}
+function registerUser(){const name=document.getElementById('regName').value.trim(),email=document.getElementById('regEmail').value.trim(),pass=document.getElementById('regPass').value;if(!name||!email||pass.length<8){showToast('Completa los datos y usa una contraseña de 8+ caracteres.');return}state.users.push({name,email,pass});save();localStorage.setItem('dh_logged_name',name);localStorage.setItem('dh_logged_email',email);closeModal();refreshAccount();showToast('Cuenta creada.');}
+function openLogin(){openModal('Entrar a mi cuenta',`<div class="field"><label>Correo</label><input id="loginEmail" type="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="loginPass" type="password" placeholder="Tu contraseña"></div><div class="modalActions"><button class="secondary" onclick="openRegister()">Crear cuenta</button><button class="primary" onclick="loginUser()">Entrar</button></div>`) }
+function loginUser(){const email=document.getElementById('loginEmail').value.trim(),pass=document.getElementById('loginPass').value,u=state.users.find(x=>x.email===email&&x.pass===pass);if(!u){showToast('No se encontró esa cuenta en el prototipo.');return}localStorage.setItem('dh_logged_name',u.name);localStorage.setItem('dh_logged_email',u.email);closeModal();refreshAccount();showToast('Bienvenido, '+u.name.split(' ')[0]+'.')}
+function refreshAccount(){const n=localStorage.getItem('dh_logged_name');const pill=document.getElementById('userpill');if(n){pill.style.display='flex';document.getElementById('avatar').textContent=n[0].toUpperCase();document.getElementById('userNameLabel').textContent=n.split(' ')[0]}else{pill.style.display='none'}}
+function openAdminLogin(){openModal('Acceso de administrador',`<div class="notice">Demo: usa <b>admin@demo.local</b> y <b>admin123</b>. En producción el acceso debe venir de un sistema de autenticación del servidor.</div><div class="field"><label>Correo de administrador</label><input id="adminEmail" value="admin@demo.local"></div><div class="field"><label>Contraseña</label><input id="adminPass" type="password" value="admin123"></div><div class="modalActions"><button class="primary" onclick="adminLogin()">Entrar al panel</button></div>`)}
+function adminLogin(){const e=document.getElementById('adminEmail').value,p=document.getElementById('adminPass').value;if(e!=='admin@demo.local'||p!=='admin123'){showToast('Credenciales demo incorrectas.');return}closeModal();showAdmin()}
+function showAdmin(){document.getElementById('storeView').style.display='none';document.getElementById('adminView').style.display='block';adminTab('dashboard')}
+function showStore(){document.getElementById('adminView').style.display='none';document.getElementById('storeView').style.display='block';window.scrollTo({top:0,behavior:'smooth'})}
+function adminTab(tab){state.adminTab=tab;document.querySelectorAll('.sideNav button').forEach(b=>b.classList.remove('active'));document.getElementById('nav-'+tab)?.classList.add('active');renderAdmin()}
+function renderAdmin(){const c=document.getElementById('adminContent');if(state.adminTab==='dashboard')c.innerHTML=dashboardHTML();if(state.adminTab==='products')c.innerHTML=productsHTML();if(state.adminTab==='sales')c.innerHTML=salesHTML();if(state.adminTab==='promos')c.innerHTML=promosHTML();if(state.adminTab==='content')c.innerHTML=contentHTML();if(state.adminTab==='settings')c.innerHTML=settingsHTML()}
+function dashboardHTML(){const total=state.sales.reduce((s,x)=>s+Number(x.amount),0),pending=state.sales.filter(x=>x.status==='Pendiente').length;return `<div class="adminTop"><div><h1>Dashboard</h1><p>Control general de la tienda y pedidos.</p></div><div class="adminActions"><button class="secondary" onclick="exportCSV()">↓ Exportar Excel/CSV</button><button class="primary" onclick="adminTab('products')">＋ Nuevo producto</button></div></div><div class="metricGrid"><div class="metric"><span>Ventas registradas</span><strong>${state.sales.length}</strong><small>Historial completo</small></div><div class="metric"><span>Ingresos acumulados</span><strong>${money(total)}</strong><small>Con datos demo</small></div><div class="metric"><span>Pendientes</span><strong>${pending}</strong><small>Revisar comprobantes</small></div><div class="metric"><span>Productos activos</span><strong>${state.products.length}</strong><small>Editables con clics</small></div></div><div class="panel"><div class="panelHead"><div><h3>Últimas ventas</h3><p>Pedidos que entraron recientemente.</p></div><button class="iconBtn" onclick="adminTab('sales')">Ver todas</button></div><div class="panelBody tableWrap">${salesTable(state.sales.slice(0,5))}</div></div><div class="panel"><div class="panelHead"><div><h3>Automatización</h3><p>La demo simula la notificación al bot de Telegram.</p></div><span class="status ok">ACTIVA · DEMO</span></div><div class="panelBody"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div class="metric"><span>Bot</span><strong style="font-size:18px">Telegram</strong><small>Listo para conectar</small></div><div class="metric"><span>Alerta</span><strong style="font-size:18px">Nuevo pedido</strong><small>Cliente + producto + monto</small></div><div class="metric"><span>Recepción</span><strong style="font-size:18px">Panel Admin</strong><small>Registro automático</small></div></div></div></div>`}
+function salesTable(rows){return `<table class="table"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>ID jugador</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map((s,i)=>`<tr><td><b>${s.id}</b></td><td>${s.date}</td><td>${s.customer}<br><span style="color:#68728d;font-size:10px">${s.email}</span></td><td>${s.product}</td><td>${s.player}</td><td><b>${money(s.amount)}</b></td><td><span class="status ${s.status==='Aprobada'?'ok':'pending'}">${s.status}</span></td><td><button class="iconBtn" onclick="editSale(${i+1})">Abrir</button></td></tr>`).join('')}</tbody></table>`}
+function productsHTML(){return `<div class="adminTop"><div><h1>Productos</h1><p>Crea paquetes, promociones u otros productos sin tocar código.</p></div><div class="adminActions"><button class="secondary" onclick="showStore()">Ver tienda</button><button class="primary" onclick="newProduct()">＋ Crear producto</button></div></div><div class="panel"><div class="panelHead"><div><h3>Catálogo</h3><p>${state.products.length} productos activos</p></div></div><div class="panelBody tableWrap"><table class="table"><thead><tr><th>Producto</th><th>Categoría</th><th>Diamantes</th><th>Precio</th><th>Etiqueta</th><th>Acciones</th></tr></thead><tbody>${state.products.map((p,i)=>`<tr><td><b>${p.name}</b></td><td>${p.category}</td><td>${p.diamonds||'—'}</td><td>${money(p.price)}</td><td><span class="status mutedStatus">${p.tag||'—'}</span></td><td><button class="iconBtn" onclick="editProduct(${p.id})">Editar</button> <button class="iconBtn danger" onclick="deleteProduct(${p.id})">Eliminar</button></td></tr>`).join('')}</tbody></table></div></div>`}
+function productForm(p={}){return `<div class="formGrid"><div class="field"><label>Nombre del producto</label><input id="pf_name" value="${p.name||''}" placeholder="Ej. 100 Diamantes"></div><div class="field"><label>Categoría</label><input id="pf_cat" value="${p.category||'Diamantes'}" placeholder="Diamantes / Promos / Cuentas"></div><div class="field"><label>Cantidad de diamantes</label><input id="pf_diamonds" type="number" value="${p.diamonds||''}" placeholder="100"></div><div class="field"><label>Precio (MXN)</label><input id="pf_price" type="number" value="${p.price||''}" placeholder="50"></div><div class="field"><label>Etiqueta</label><input id="pf_tag" value="${p.tag||'Oferta'}" placeholder="Popular"></div><div class="field"><label>Orden visual</label><select id="pf_order"><option>Normal</option><option>Destacado</option></select></div></div><div class="formActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveProduct(${p.id||0})">Guardar</button></div>`}
+function newProduct(){openModal('Nuevo producto',productForm())}
+function editProduct(id){const p=state.products.find(x=>x.id===id);openModal('Editar · '+p.name,productForm(p))}
+function saveProduct(id){const obj={id:id||Date.now(),name:document.getElementById('pf_name').value.trim(),category:document.getElementById('pf_cat').value.trim()||'General',diamonds:Number(document.getElementById('pf_diamonds').value)||0,price:Number(document.getElementById('pf_price').value)||0,tag:document.getElementById('pf_tag').value.trim()||'Oferta'};if(!obj.name||!obj.price){showToast('Agrega nombre y precio.');return}if(id){const ix=state.products.findIndex(x=>x.id===id);state.products[ix]=obj}else state.products.push(obj);save();closeModal();renderAdmin();renderStore();showToast(id?'Producto actualizado.':'Producto creado.')}
+function deleteProduct(id){if(!confirm('¿Eliminar este producto del catálogo?'))return;state.products=state.products.filter(x=>x.id!==id);save();renderAdmin();renderStore();showToast('Producto eliminado.')}
+function salesHTML(){const total=state.sales.reduce((s,x)=>s+Number(x.amount),0);return `<div class="adminTop"><div><h1>Ventas</h1><p>Historial de pedidos, clientes, montos y estados.</p></div><div class="adminActions"><button class="secondary" onclick="exportCSV()">↓ Exportar Excel/CSV</button></div></div><div class="metricGrid"><div class="metric"><span>Ingresos</span><strong>${money(total)}</strong></div><div class="metric"><span>Pedidos</span><strong>${state.sales.length}</strong></div><div class="metric"><span>Promedio por pedido</span><strong>${money(state.sales.length?total/state.sales.length:0)}</strong></div><div class="metric"><span>Aprobadas</span><strong>${state.sales.filter(s=>s.status==='Aprobada').length}</strong></div></div><div class="panel"><div class="panelHead"><div><h3>Registro de pedidos</h3><p>El botón de exportación genera un CSV compatible con Excel.</p></div></div><div class="panelBody tableWrap">${salesTable(state.sales)}</div></div>`}
+function editSale(displayIndex){showToast('Abre el pedido desde una implementación conectada a una base de datos para validar el comprobante y marcarlo como aprobado.')}function promosHTML(){return `<div class="adminTop"><div><h1>Promociones</h1><p>Crea campañas que aparezcan como tarjetas o botones en la tienda.</p></div><button class="primary" onclick="newPromo()">＋ Nueva promoción</button></div><div class="bannerGrid"><div class="bannerCard"><div class="bannerVisual"></div><div class="content"><h4>Promo de ejemplo · +10%</h4><p>Una tarjeta editable para mostrar eventos, descuentos, recargas especiales o mensajes importantes.</p><small>Activa · Botón: Ver promoción</small></div></div><div class="bannerCard"><div class="bannerVisual" style="background:linear-gradient(135deg,rgba(34,211,238,.16),transparent 65%)"></div><div class="content"><h4>Flyer destacado</h4><p>En la versión conectada puedes cargar una imagen desde tu computadora y elegir dónde mostrarla.</p><small>Imagen · Inicio</small></div></div></div><div class="panel" style="margin-top:12px"><div class="panelHead"><div><h3>Configuración de botones</h3><p>Ejemplo de campos que el administrador puede editar.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Texto del botón</label><input value="Comprar ahora"></div><div class="field"><label>Color / estilo</label><select><option>Principal</option><option>Secundario</option></select></div><div class="field"><label>Acción</label><select><option>Abrir producto</option><option>Abrir promoción</option><option>Abrir información</option></select></div><div class="field"><label>Posición</label><select><option>Inicio</option><option>Sección de promos</option></select></div></div><div class="formActions"><button class="primary" onclick="showToast('Cambios de ejemplo guardados.')">Guardar cambios</button></div></div></div>`}
+function newPromo(){openModal('Nueva promoción',`<div class="formGrid"><div class="field"><label>Título</label><input id="promoTitle" placeholder="Ej. Fin de semana x2"></div><div class="field"><label>Texto del botón</label><input id="promoBtn" value="Ver oferta"></div><div class="field"><label>Imagen / flyer</label><input id="promoImg" type="file" accept="image/*"></div><div class="field"><label>Estado</label><select id="promoStatus"><option>Activa</option><option>Oculta</option></select></div></div><div class="formActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="closeModal();showToast('Promoción de demo creada.')">Crear promoción</button></div>`)}
+function contentHTML(){return `<div class="adminTop"><div><h1>Contenido</h1><p>Gestiona banners, imágenes y mensajes visibles en la tienda.</p></div><button class="primary" onclick="newBanner()">＋ Subir banner</button></div><div class="panel"><div class="panelHead"><div><h3>Biblioteca visual</h3><p>Fotos de promociones, flyers y piezas publicitarias.</p></div></div><div class="panelBody"><div class="filebox">Arrastra una imagen aquí o selecciónala desde tu PC<br><input id="contentFile" type="file" accept="image/*" onchange="contentUpload(event)"><img id="contentPreview" class="uploadPreview"></div><div class="formGrid" style="margin-top:15px"><div class="field"><label>Nombre</label><input id="contentName" placeholder="Promo octubre"></div><div class="field"><label>Ubicación</label><select id="contentPos"><option>Hero principal</option><option>Promociones</option><option>Popup</option></select></div></div><div class="formActions"><button class="primary" onclick="saveContent()">Guardar contenido</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Espacios disponibles</h3><p>El administrador puede decidir qué mostrar en cada sección.</p></div></div><div class="panelBody"><table class="table"><thead><tr><th>Espacio</th><th>Tipo</th><th>Estado</th><th>Acción</th></tr></thead><tbody><tr><td>Hero principal</td><td>Banner</td><td><span class="status ok">Activo</span></td><td><button class="iconBtn">Editar</button></td></tr><tr><td>Promociones</td><td>Tarjetas</td><td><span class="status ok">Activo</span></td><td><button class="iconBtn">Editar</button></td></tr><tr><td>Popup</td><td>Flyer</td><td><span class="status mutedStatus">Vacío</span></td><td><button class="iconBtn">Agregar</button></td></tr></tbody></table></div></div>`}
+function contentUpload(e){const f=e.target.files?.[0],img=document.getElementById('contentPreview');if(!f||!img)return;const r=new FileReader();r.onload=ev=>{img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f)}
+function saveContent(){showToast('Contenido guardado en esta demo. En producción se subirá al almacenamiento del servidor.')}function newBanner(){adminTab('content')}
+function settingsHTML(){return `<div class="adminTop"><div><h1>Configuración</h1><p>Conecta la tienda con tus sistemas reales sin exponer secretos en el navegador.</p></div></div><div class="panel"><div class="panelHead"><div><h3>Telegram</h3><p>Para notificar nuevas compras al administrador.</p></div><span class="status pending">PENDIENTE DE CONEXIÓN</span></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Bot de Telegram</label><input placeholder="Se configura en backend"></div><div class="field"><label>Chat ID</label><input placeholder="Se configura en backend"></div></div><div class="notice">En el sistema real, el token del bot no debe guardarse en el HTML ni en JavaScript público. Debe vivir en un servidor o función backend.</div><button class="primary" onclick="showToast('Configuración demo guardada; falta conectar backend.')">Guardar</button></div></div><div class="panel"><div class="panelHead"><div><h3>Pagos</h3><p>Datos que aparecen antes de subir el comprobante.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Banco</label><input value="Banco Demo"></div><div class="field"><label>Beneficiario</label><input value="TIENDA DIAMONDHUB"></div><div class="field"><label>Cuenta / CLABE</label><input value="0000 0000 0000 0000"></div><div class="field"><label>Instrucción</label><input value="Realiza la transferencia y guarda el comprobante."></div></div><div class="formActions"><button class="primary" onclick="showToast('Datos de pago de demo guardados.')">Guardar</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Seguridad</h3><p>Configuraciones recomendadas para el sistema final.</p></div></div><div class="panelBody"><div style="display:grid;gap:9px;color:#c6cde0;font-size:12px"><div>✓ Autenticación de clientes</div><div>✓ Autenticación separada de administradores</div><div>✓ Hash de contraseñas en servidor</div><div>✓ Comprobantes almacenados de forma privada</div><div>✓ Registro de eventos y estados de pedido</div></div></div></div>`}
+function exportCSV(){const rows=[['Pedido','Fecha','Cliente','Correo','Producto','ID jugador','Total MXN','Estado'],...state.sales.map(s=>[s.id,s.date,s.customer,s.email,s.product,s.player,s.amount,s.status])];const csv='\\ufeff'+rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ventas_diamondhub.csv';a.click();URL.revokeObjectURL(a.href);showToast('CSV exportado. Excel puede abrirlo directamente.')}
+renderStore();refreshAccount();
+</script>
+<script>
+const ADMIN_EMAIL='admin@diamondhub.local';
+const ADMIN_PASS='CambiarMe!2026';
+if(!state.settings){state.settings={socials:{instagram:'https://instagram.com/',facebook:'https://facebook.com/',telegram:'https://t.me/',whatsapp:'https://wa.me/'},socialLabel:'Soporte y novedades',socialText:'Contáctanos por cualquiera de nuestras redes.',payment:{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'}}}
+if(!state.notifications)state.notifications=[];
+state.users=state.users.map(function(u){return Object.assign({},u,{username:u.username||u.email.split('@')[0]})});
+save();
+
+function currentUser(){var email=localStorage.getItem('dh_logged_email');return state.users.find(function(u){return u.email===email})||null}
+function openLogin(message){message=message||'';openModal('Ingresar',(message?'<div class="notice">'+message+'</div>':'')+'<div class="field"><label>Usuario o correo</label><input id="loginIdentity" autocomplete="username" placeholder="Tu usuario o correo"></div><div class="field"><label>Contraseña</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Tu contraseña"></div><div class="modalActions"><button class="secondary" onclick="openRegister()">Registrarse</button><button class="primary" onclick="loginUser()">Ingresar</button></div>')}
+function openRegister(){openModal('Crear cuenta','<div class="notice">Tu cuenta guarda tus compras y permite consultar el estado de cada pedido.</div><div class="formGrid"><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre completo"></div><div class="field"><label>Usuario</label><input id="regUsername" autocomplete="username" placeholder="Ej. pedro123"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" autocomplete="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>')}
+function registerUser(){var name=document.getElementById('regName').value.trim(),username=document.getElementById('regUsername').value.trim().toLowerCase(),email=document.getElementById('regEmail').value.trim().toLowerCase(),pass=document.getElementById('regPass').value;if(!name||!username||!email||pass.length<8){showToast('Completa todos los campos y usa 8+ caracteres.');return}if(state.users.some(function(u){return u.username===username||u.email===email})){showToast('Ese usuario o correo ya está registrado.');return}state.users.push({name:name,username:username,email:email,pass:pass});save();localStorage.setItem('dh_logged_name',name);localStorage.setItem('dh_logged_email',email);closeModal();refreshAccount();showToast('Cuenta creada correctamente.')}
+function loginUser(){var identity=document.getElementById('loginIdentity').value.trim().toLowerCase(),pass=document.getElementById('loginPass').value;if(identity===ADMIN_EMAIL&&pass===ADMIN_PASS){closeModal();showAdmin();return}var u=state.users.find(function(x){return (x.username===identity||x.email===identity)&&x.pass===pass});if(!u){showToast('Usuario o contraseña incorrectos.');return}localStorage.setItem('dh_logged_name',u.name);localStorage.setItem('dh_logged_email',u.email);closeModal();refreshAccount();showToast('Bienvenido, '+u.name.split(' ')[0]+'.')}
+function refreshAccount(){var u=currentUser(),pill=document.getElementById('userpill');if(u){pill.style.display='flex';pill.onclick=openAccount;pill.style.cursor='pointer';document.getElementById('avatar').textContent=u.name[0].toUpperCase();document.getElementById('userNameLabel').textContent=u.username}else{pill.style.display='none'}}
+function logoutUser(){localStorage.removeItem('dh_logged_name');localStorage.removeItem('dh_logged_email');refreshAccount();closeModal();showToast('Sesión cerrada.')}
+function openAccount(){var u=currentUser();if(!u){openLogin();return}var orders=state.sales.filter(function(s){return s.email===u.email});var content='<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+u.name+'</div><div class="orderMeta">@'+u.username+' · '+u.email+'</div></div><button class="iconBtn danger" onclick="logoutUser()">Cerrar sesión</button></div></div><div class="panel" style="margin-top:12px"><div class="panelHead"><div><h3>Mis compras</h3><p>Aquí puedes ver el pago y la entrega.</p></div></div><div class="panelBody">'+(orders.length?'<div class="accountOrders">'+orders.map(orderCardHTML).join('')+'</div>':'<div class="empty">Todavía no tienes compras registradas.</div>')+'</div></div>';openModal('Mi cuenta',content)}
+function orderCardHTML(s){var delivered=s.status==='Entrega realizada',verified=s.status==='Transferencia verificada',isAccount=s.deliveryType==='account';var timeline='<div class="timeline"><div class="timelineStep '+(s.status!=='Pendiente'?'done':'current')+'">Pago enviado</div><div class="timelineStep '+(delivered?'done':verified?'current':'')+'">Transferencia verificada</div><div class="timelineStep '+(delivered?'done':'')+'">Entrega realizada</div></div>';var note=s.status==='Pendiente'?'<div class="notice">Estamos revisando tu comprobante.</div>':verified?'<div class="notice">Tu transferencia ya fue comprobada. La entrega está en proceso.</div>':'';var delivery=delivered?'<div class="deliveryBox"><b>'+(isAccount?'Datos de tu cuenta':'Diamantes enviados')+'</b><div style="font-size:11px;color:var(--muted);margin-top:4px">'+(s.deliveryNote||'La entrega fue marcada como realizada.')+'</div>'+(isAccount?'<div class="field" style="margin-top:10px"><label>Correo / usuario</label><input readonly value="'+(s.deliveryUser||'')+'"></div><div class="field"><label>Contraseña</label><input readonly value="'+(s.deliveryPass||'')+'"></div>':'<div style="margin-top:9px;font-size:12px;color:#ccefe0">Ya puedes entrar a tu juego y comprobar la recarga.</div>')+'</div>':'';return '<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+s.product+'</div><div class="orderMeta">'+s.id+' · '+s.date+'</div></div><span class="status '+(delivered?'ok':'pending')+'">'+s.status+'</span></div>'+timeline+note+delivery+'</div>'}
+function startPurchase(id){var p=state.products.find(function(x){return x.id===id});if(!p)return;if(!currentUser()){openLogin('<b>Inicia sesión</b> para que tu pedido quede ligado a tu cuenta y puedas consultar la entrega.');return}state.currentProduct=p;state.purchaseStep=1;state.selectedReceipt=null;state.selectedReceiptDataUrl='';renderPurchase()}
+function previewReceipt(e){var f=e.target.files&&e.target.files[0];if(!f)return;state.selectedReceipt=f.name;state.selectedReceiptDataUrl='';var img=document.getElementById('receiptPreview');if(f.type.indexOf('image/')===0){var r=new FileReader();r.onload=function(ev){state.selectedReceiptDataUrl=ev.target.result;img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f)}}
+function submitPurchase(){var u=currentUser(),player=document.getElementById('playerId').value.trim();if(!u||!player||!state.selectedReceipt){showToast('Completa tu ID y adjunta el comprobante.');return}var id='DH-'+Math.floor(1000+Math.random()*8999),p=state.currentProduct,isAccount=(p.kind||'diamonds')==='account';var sale={id:id,date:new Date().toLocaleString('es-MX'),customer:u.name,email:u.email,username:u.username,product:p.name,amount:p.price,status:'Pendiente',player:player,receiptName:state.selectedReceipt,receiptDataUrl:state.selectedReceiptDataUrl||'',deliveryType:isAccount?'account':'diamonds',deliveryNote:'Entrega pendiente de validación.'};state.lastOrder=id;state.sales.unshift(sale);state.notifications.unshift({id:'NT-'+Date.now(),orderId:id,type:'telegram',message:'Nueva compra '+id+': '+u.name+' · '+p.name+' · '+money(p.price),read:false,date:new Date().toLocaleString('es-MX')});save();simulateTelegram(sale);state.purchaseStep=3;renderPurchase()}
+function simulateTelegram(s){console.log('TELEGRAM',s);showToast('Pedido registrado. El bot recibirá la alerta al conectar Telegram.')}
+function approvePayment(id){var s=state.sales.find(function(x){return x.id===id});if(!s)return;s.status='Transferencia verificada';s.paymentVerifiedAt=new Date().toLocaleString('es-MX');s.deliveryNote=s.deliveryType==='account'?'Pago comprobado. Falta entregar los datos de acceso.':'Pago comprobado. Falta realizar la recarga de diamantes.';s.adminMessage='El administrador comprobó la transferencia.';save();closeModal();renderAdmin();showToast('Transferencia marcada como verificada.')}
+function deliverOrder(id){var s=state.sales.find(function(x){return x.id===id});if(!s)return;if(s.status!=='Transferencia verificada'){showToast('Primero verifica la transferencia.');return}if(s.deliveryType==='account'){var user=document.getElementById('deliveryUser').value.trim(),pass=document.getElementById('deliveryPass').value;if(!user||!pass){showToast('Agrega usuario/correo y contraseña.');return}s.deliveryUser=user;s.deliveryPass=pass}s.deliveryNote=document.getElementById('deliveryNote').value.trim()||(s.deliveryType==='account'?'Datos de acceso entregados.':'Diamantes enviados correctamente.');s.status='Entrega realizada';s.deliveredAt=new Date().toLocaleString('es-MX');save();closeModal();renderAdmin();showToast('Entrega marcada como realizada.')}
+function salesTable(rows){return '<table class="table"><thead><tr><th>Pedido</th><th>Fecha</th><th>Cliente</th><th>Producto</th><th>ID jugador</th><th>Total</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(function(s){return '<tr><td><b>'+s.id+'</b></td><td>'+s.date+'</td><td>'+s.customer+'<br><span style="color:#68728d;font-size:10px">'+s.email+'</span></td><td>'+s.product+'</td><td>'+s.player+'</td><td><b>'+money(s.amount)+'</b></td><td><span class="status '+(s.status==='Entrega realizada'?'ok':s.status==='Transferencia verificada'?'mutedStatus':'pending')+'">'+s.status+'</span></td><td><button class="iconBtn" data-order-id="'+s.id+'" onclick="editSaleById(this.dataset.orderId)">Abrir</button></td></tr>'}).join('')+'</tbody></table>'}
+function editSaleById(id){var s=state.sales.find(function(x){return x.id===id});if(!s)return;var receipt=s.receiptDataUrl?'<img class="receiptThumb" src="'+s.receiptDataUrl+'" alt="Comprobante">':'<div class="notice">Archivo adjunto: <b>'+(s.receiptName||'comprobante')+'</b></div>';var fields=s.deliveryType==='account'?'<div class="formGrid"><div class="field"><label>Correo / usuario a entregar</label><input id="deliveryUser" value="'+(s.deliveryUser||'')+'" placeholder="correo@cuenta.com"></div><div class="field"><label>Contraseña a entregar</label><input id="deliveryPass" value="'+(s.deliveryPass||'')+'" placeholder="Contraseña"></div></div>':'';var actions=s.status==='Pendiente'?'<button class="primary" data-order-id="'+s.id+'" onclick="approvePayment(this.dataset.orderId)">✓ Confirmar transferencia</button>':s.status==='Transferencia verificada'?'<button class="primary" data-order-id="'+s.id+'" onclick="deliverOrder(this.dataset.orderId)">✓ Marcar entrega realizada</button>':'<span class="status ok">✓ Cliente notificado</span>';openModal('Pedido '+s.id,'<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+s.customer+'</div><div class="orderMeta">'+s.email+' · @'+(s.username||'cliente')+' · ID Free Fire: '+s.player+'</div></div><span class="status '+(s.status==='Entrega realizada'?'ok':'pending')+'">'+s.status+'</span></div><div class="payBox" style="margin-top:12px"><div class="payRow"><span>Producto</span><b>'+s.product+'</b></div><div class="payRow"><span>Total</span><b>'+money(s.amount)+'</b></div><div class="payRow"><span>Tipo</span><b>'+(s.deliveryType==='account'?'Cuenta / acceso':'Diamantes')+'</b></div></div><div style="margin-top:14px;font-size:12px;color:#aeb7d0;font-weight:800">Comprobante</div>'+receipt+fields+'<div class="field" style="margin-top:12px"><label>Mensaje de entrega visible para el cliente</label><textarea id="deliveryNote" rows="3" placeholder="Ej. Tus diamantes ya fueron enviados.">'+(s.deliveryNote||'')+'</textarea></div><div class="adminOrderActions">'+actions+'<button class="secondary" onclick="closeModal()">Cerrar</button></div></div>')}
+function dashboardHTML(){var total=state.sales.reduce(function(sum,x){return sum+Number(x.amount)},0),pending=state.sales.filter(function(x){return x.status==='Pendiente'}).length,verified=state.sales.filter(function(x){return x.status==='Transferencia verificada'}).length,delivered=state.sales.filter(function(x){return x.status==='Entrega realizada'}).length,unread=state.notifications.filter(function(n){return !n.read}).length;return '<div class="adminTop"><div><h1>Dashboard</h1><p>Pedidos, comprobantes y entregas en un solo lugar.</p></div><div class="adminActions"><button class="secondary" onclick="markNotificationsRead()">Telegram · '+unread+' nuevas</button><button class="secondary" onclick="exportCSV()">↓ Exportar Excel/CSV</button><button class="primary" data-tab="products" onclick="adminTab(this.dataset.tab)">＋ Nuevo producto</button></div></div><div class="metricGrid"><div class="metric"><span>Pendientes de revisar</span><strong>'+pending+'</strong><small>Comprobantes recibidos</small></div><div class="metric"><span>Pagos verificados</span><strong>'+verified+'</strong><small>Listos para entregar</small></div><div class="metric"><span>Entregas realizadas</span><strong>'+delivered+'</strong><small>Cliente notificado</small></div><div class="metric"><span>Ingresos acumulados</span><strong>'+money(total)+'</strong><small>'+state.sales.length+' pedidos</small></div></div><div class="panel"><div class="panelHead"><div><h3>Pedidos que requieren atención</h3><p>Abre un pedido para validar el comprobante y completar la entrega.</p></div></div><div class="panelBody tableWrap">'+salesTable(state.sales.filter(function(s){return s.status!=='Entrega realizada'}))+'</div></div><div class="panel"><div class="panelHead"><div><h3>Notificaciones</h3><p>Aquí aterrizan las alertas del bot de Telegram.</p></div></div><div class="panelBody">'+(state.notifications.length?state.notifications.slice(0,6).map(function(n){return '<div class="orderCard" style="margin-bottom:8px"><b>'+n.message+'</b><div class="orderMeta">'+n.date+(n.read?' · leída':' · nueva')+'</div></div>'}).join(''):'<div class="empty">No hay notificaciones.</div>')+'</div></div>'}
+function salesHTML(){var total=state.sales.reduce(function(sum,x){return sum+Number(x.amount)},0);return '<div class="adminTop"><div><h1>Ventas</h1><p>Historial completo, validación y entrega.</p></div><div class="adminActions"><button class="secondary" onclick="exportCSV()">↓ Exportar Excel/CSV</button></div></div><div class="metricGrid"><div class="metric"><span>Ingresos</span><strong>'+money(total)+'</strong></div><div class="metric"><span>Pedidos</span><strong>'+state.sales.length+'</strong></div><div class="metric"><span>Verificados</span><strong>'+state.sales.filter(function(s){return s.status!=='Pendiente'}).length+'</strong></div><div class="metric"><span>Entregados</span><strong>'+state.sales.filter(function(s){return s.status==='Entrega realizada'}).length+'</strong></div></div><div class="panel"><div class="panelHead"><div><h3>Registro de pedidos</h3><p>Selecciona un pedido para revisar el comprobante y completar la entrega.</p></div></div><div class="panelBody tableWrap">'+salesTable(state.sales)+'</div></div>'}
+function productForm(p){p=p||{};return '<div class="formGrid"><div class="field"><label>Nombre del producto</label><input id="pf_name" value="'+(p.name||'')+'" placeholder="Ej. 100 Diamantes o cuenta"></div><div class="field"><label>Categoría</label><input id="pf_cat" value="'+(p.category||'Diamantes')+'" placeholder="Diamantes / Promos / Cuentas"></div><div class="field"><label>Tipo de entrega</label><select id="pf_kind"><option value="diamonds" '+((p.kind||'diamonds')==='diamonds'?'selected':'')+'>Diamantes / recarga</option><option value="account" '+((p.kind||'')==='account'?'selected':'')+'>Cuenta / credenciales</option><option value="other" '+((p.kind||'')==='other'?'selected':'')+'>Otro producto</option></select></div><div class="field"><label>Cantidad de diamantes</label><input id="pf_diamonds" type="number" value="'+(p.diamonds||'')+'" placeholder="Solo si aplica"></div><div class="field"><label>Precio (MXN)</label><input id="pf_price" type="number" value="'+(p.price||'')+'" placeholder="50"></div><div class="field"><label>Etiqueta</label><input id="pf_tag" value="'+(p.tag||'Oferta')+'" placeholder="Popular"></div></div><div class="formActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveProduct('+(p.id||0)+')">Guardar</button></div>'}
+function saveProduct(id){var obj={id:id||Date.now(),name:document.getElementById('pf_name').value.trim(),category:document.getElementById('pf_cat').value.trim()||'General',kind:document.getElementById('pf_kind').value,diamonds:Number(document.getElementById('pf_diamonds').value)||0,price:Number(document.getElementById('pf_price').value)||0,tag:document.getElementById('pf_tag').value.trim()||'Oferta'};if(!obj.name||!obj.price){showToast('Agrega nombre y precio.');return}if(id){var ix=state.products.findIndex(function(x){return x.id===id});state.products[ix]=obj}else state.products.push(obj);save();closeModal();renderAdmin();renderStore();showToast(id?'Producto actualizado.':'Producto creado.')}
+function markNotificationsRead(){state.notifications=state.notifications.map(function(n){return Object.assign({},n,{read:true})});save();renderAdmin();showToast('Notificaciones marcadas como leídas.')}
+function installSocialBanner(){if(document.getElementById('socialBanner'))return;var footer=document.querySelector('#storeView .footer');if(!footer)return;var b=document.createElement('section');b.id='socialBanner';b.className='container socialBanner';b.innerHTML='<div><h3>'+state.settings.socialLabel+'</h3><p>'+state.settings.socialText+'</p></div><div class="socialLinks"><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.instagram+'">Instagram</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.facebook+'">Facebook</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.telegram+'">Telegram</a><a class="socialLink" target="_blank" rel="noreferrer" href="'+state.settings.socials.whatsapp+'">WhatsApp</a></div>';footer.parentNode.insertBefore(b,footer)}
+function saveSocialSettings(){state.settings.socials={instagram:document.getElementById('socialInstagram').value.trim()||'#',facebook:document.getElementById('socialFacebook').value.trim()||'#',telegram:document.getElementById('socialTelegram').value.trim()||'#',whatsapp:document.getElementById('socialWhatsapp').value.trim()||'#'};state.settings.socialLabel=document.getElementById('socialLabel').value.trim()||'Soporte y novedades';state.settings.socialText=document.getElementById('socialText').value.trim()||'Contáctanos por cualquiera de nuestras redes.';save();if(document.getElementById('socialBanner'))document.getElementById('socialBanner').remove();installSocialBanner();showToast('Redes sociales actualizadas.')}
+function savePaymentSettings(){state.settings.payment={bank:document.getElementById('payBank').value.trim()||'Banco Demo',beneficiary:document.getElementById('payBeneficiary').value.trim()||'TIENDA DIAMONDHUB',account:document.getElementById('payAccount').value.trim()||'0000 0000 0000 0000',instruction:document.getElementById('payInstruction').value.trim()||'Realiza la transferencia y guarda el comprobante.'};save();showToast('Datos de pago actualizados.')}
+function settingsHTML(){var pay=state.settings.payment||{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'};return '<div class="adminTop"><div><h1>Configuración</h1><p>Telegram, redes y datos de pago.</p></div></div><div class="panel"><div class="panelHead"><div><h3>Telegram</h3><p>Conexión preparada para el bot.</p></div><span class="status pending">BACKEND</span></div><div class="panelBody"><div class="notice">El token y el Chat ID deben configurarse en el servidor, no en el HTML público.</div><div class="formGrid"><div class="field"><label>Bot</label><input placeholder="@MiBot"></div><div class="field"><label>Chat ID</label><input placeholder="Configurado en servidor"></div></div></div></div><div class="panel"><div class="panelHead"><div><h3>Redes sociales</h3><p>Aparecen en el banner público.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Instagram</label><input id="socialInstagram" value="'+state.settings.socials.instagram+'"></div><div class="field"><label>Facebook</label><input id="socialFacebook" value="'+state.settings.socials.facebook+'"></div><div class="field"><label>Telegram</label><input id="socialTelegram" value="'+state.settings.socials.telegram+'"></div><div class="field"><label>WhatsApp</label><input id="socialWhatsapp" value="'+state.settings.socials.whatsapp+'"></div><div class="field"><label>Título del banner</label><input id="socialLabel" value="'+state.settings.socialLabel+'"></div><div class="field"><label>Texto del banner</label><input id="socialText" value="'+state.settings.socialText+'"></div></div><div class="formActions"><button class="primary" onclick="saveSocialSettings()">Guardar redes</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Pagos</h3><p>Estos datos se muestran en el paso de transferencia antes de subir el comprobante.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Banco</label><input id="payBank" value="'+pay.bank+'"></div><div class="field"><label>Beneficiario</label><input id="payBeneficiary" value="'+pay.beneficiary+'"></div><div class="field"><label>Cuenta / CLABE</label><input id="payAccount" value="'+pay.account+'"></div><div class="field"><label>Instrucción</label><input id="payInstruction" value="'+pay.instruction+'"></div></div><div class="formActions"><button class="primary" onclick="savePaymentSettings()">Guardar datos de pago</button></div></div></div>'}
+function renderStore(){var cats=['Todos'].concat(Array.from(new Set(state.products.map(function(p){return p.category}))));var catHtml=cats.map(function(c){var safe=String(c).replace(/'/g,"\\\\'");return '<button class="chip '+(state.category===c?'active':'')+'" data-category="'+safe+'" onclick="setCategory(this.dataset.category)">'+c+'</button>'}).join('');document.getElementById('categoryFilters').innerHTML=catHtml;var filtered=state.category==='Todos'?state.products:state.products.filter(function(p){return p.category===state.category});document.getElementById('productGrid').innerHTML=filtered.map(function(p){return '<article class="product"><div class="productVisual"><div class="miniDiamond"></div></div><div class="productBody"><div class="productTop"><div><div class="productName">'+p.name+'</div><div class="productMeta">'+((p.kind||'diamonds')==='account'?'Entrega de datos de acceso':'Entrega a ID de jugador')+'</div></div><span class="badge">'+(p.tag||'Oferta')+'</span></div><div class="productBottom"><div class="price">'+money(p.price)+'</div><button class="buy" onclick="startPurchase('+p.id+')">Comprar</button></div></div></article>'}).join('');installSocialBanner()}
+function setCategory(c){state.category=c;renderStore()}
+const SB_URL='https://wfbhmwxzdqifzydgltou.supabase.co';
+const SB_KEY='sb_publishable_xzYWTmy8ykox6nPgmfXH7g_-1LqirUa';
+const SB_HEADERS={'apikey':SB_KEY,'Content-Type':'application/json'};
+let sbSession=null;
+
+async function sbFetch(path,options={}){
+  const headers=Object.assign({},SB_HEADERS,options.headers||{});
+  if(sbSession&&sbSession.access_token)headers.Authorization='Bearer '+sbSession.access_token;
+  const r=await fetch(SB_URL+path,Object.assign({},options,{headers}));
+  const text=await r.text();
+  let data=null;
+  try{data=text?JSON.parse(text):null}catch(_){data=text}
+  if(!r.ok)throw new Error((data&&data.message)||data?.error_description||('HTTP '+r.status));
+  return data;
+}
+
+async function sbAuth(path,body){
+  const r=await fetch(SB_URL+'/auth/v1/'+path,{method:'POST',headers:SB_HEADERS,body:JSON.stringify(body)});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.msg||data.error_description||data.message||'Error de autenticación');
+  return data;
+}
+
+async function signUpSupabase(name,username,email,pass){
+  const redirectTo=window.location.origin+'/';
+  const r=await fetch(SB_URL+'/auth/v1/signup?redirect_to='+encodeURIComponent(redirectTo),{method:'POST',headers:SB_HEADERS,body:JSON.stringify({email,password:pass,data:{name,username}})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.msg||data.error_description||data.message||'No se pudo registrar la cuenta.');
+  if(!data.access_token)throw new Error('Revisa tu correo para confirmar la cuenta antes de iniciar sesión.');
+  sbSession=data;
+  return data;
+}
+
+async function loginSupabase(identity,pass){
+  let email=identity;
+  if(!identity.includes('@')){
+    const rows=await sbFetch('/rest/v1/profiles?select=email&username=eq.'+encodeURIComponent(identity)+'&limit=1');
+    if(!rows.length)throw new Error('Usuario o contraseña incorrectos.');
+    email=rows[0].email;
+  }
+  const data=await sbAuth('token?grant_type=password',{email,password:pass});
+  sbSession=data;
+  localStorage.setItem('dh_access_token',data.access_token||'');
+  localStorage.setItem('dh_refresh_token',data.refresh_token||'');
+  return data;
+}
+
+async function loadSession(){
+  const access=localStorage.getItem('dh_access_token'),refresh=localStorage.getItem('dh_refresh_token');
+  if(access){sbSession={access_token:access,refresh_token:refresh};try{return await sbFetch('/auth/v1/user')}catch(_){}}
+  return null;
+}
+
+async function loadProfile(){
+  if(!sbSession?.user)return null;
+  const rows=await sbFetch('/rest/v1/profiles?select=id,name,username,email,role&id=eq.'+encodeURIComponent(sbSession.user.id)+'&limit=1');
+  return rows[0]||null;
+}
+
+async function loadProductsRemote(){
+  const rows=await sbFetch('/rest/v1/products?select=id,name,category,kind,diamonds,price,tag,active&active=eq.true&order=id.asc');
+  if(rows&&rows.length){
+    state.products=rows.map(p=>({id:p.id,name:p.name,category:p.category,kind:p.kind,diamonds:p.diamonds,price:Number(p.price),tag:p.tag}));
+    localStorage.setItem('dh_products',JSON.stringify(state.products));
+  }
+}
+
+async function ensureSeedProducts(){
+  const rows=await sbFetch('/rest/v1/products?select=id&limit=1');
+  if(rows.length)return;
+  for(const p of defaultProducts){
+    await sbFetch('/rest/v1/products',{method:'POST',body:JSON.stringify({name:p.name,category:p.category,kind:'diamonds',diamonds:p.diamonds,price:p.price,tag:p.tag,active:true})});
+  }
+}
+
+async function loadPaymentSettings(){
+  try{
+    const rows=await sbFetch('/rest/v1/store_settings?select=bank,beneficiary,account,payment_instruction,instagram,facebook,telegram,whatsapp,social_label,social_text&id=eq.1&limit=1');
+    if(rows[0]){
+      state.settings={payment:{bank:rows[0].bank,beneficiary:rows[0].beneficiary,account:rows[0].account,instruction:rows[0].payment_instruction},socials:{instagram:rows[0].instagram||'#',facebook:rows[0].facebook||'#',telegram:rows[0].telegram||'#',whatsapp:rows[0].whatsapp||'#'},socialLabel:rows[0].social_label||'Soporte y novedades',socialText:rows[0].social_text||'Contáctanos por cualquiera de nuestras redes.'};
+    }
+  }catch(_){}
+}
+
+async function loadMyOrders(){
+  if(!sbSession?.user)return [];
+  const rows=await sbFetch('/rest/v1/orders?select=id,product_name,amount,player_id,status,created_at,delivery_note,product_id&user_id=eq.'+encodeURIComponent(sbSession.user.id)+'&order=created_at.desc');
+  return rows.map(o=>({id:o.id.slice(0,8).toUpperCase(),date:new Date(o.created_at).toLocaleString('es-MX'),product:o.product_name,amount:Number(o.amount),player:o.player_id,status:o.status,deliveryNote:o.delivery_note||'',deliveryType:'diamonds'}));
+}
+
+function currentRemoteProfile(){return window.__dhProfile||null}
+
+function clearRemoteSession(){
+  sbSession=null;window.__dhProfile=null;
+  localStorage.removeItem('dh_access_token');localStorage.removeItem('dh_refresh_token');localStorage.removeItem('dh_logged_name');localStorage.removeItem('dh_logged_email');
+  refreshAccount();
+}
+
+async function openLogin(message){
+  message=message||'';
+  openModal('Ingresar',(message?'<div class="notice">'+message+'</div>':'')+'<div class="field"><label>Usuario o correo</label><input id="loginIdentity" autocomplete="username" placeholder="Tu usuario o correo"></div><div class="field"><label>Contraseña</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Tu contraseña"></div><div class="modalActions"><button class="secondary" onclick="openRegister()">Registrarse</button><button class="primary" onclick="loginUser()">Ingresar</button></div>');
+}
+
+function openRegister(){
+  openModal('Crear cuenta','<div class="notice">La cuenta quedará almacenada en Supabase y podrás consultar tus pedidos desde cualquier dispositivo.</div><div class="formGrid"><div class="field"><label>Nombre</label><input id="regName" placeholder="Tu nombre completo"></div><div class="field"><label>Usuario</label><input id="regUsername" autocomplete="username" placeholder="Ej. pedro123"></div><div class="field"><label>Correo</label><input id="regEmail" type="email" autocomplete="email" placeholder="correo@ejemplo.com"></div><div class="field"><label>Contraseña</label><input id="regPass" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div></div><div class="modalActions"><button class="secondary" onclick="openLogin()">Ya tengo cuenta</button><button class="primary" onclick="registerUser()">Crear cuenta</button></div>');
+}
+
+async function registerUser(){
+  const name=document.getElementById('regName').value.trim(),username=document.getElementById('regUsername').value.trim().toLowerCase(),email=document.getElementById('regEmail').value.trim().toLowerCase(),pass=document.getElementById('regPass').value;
+  if(!name||!username||!email||pass.length<8){showToast('Completa todos los campos y usa 8+ caracteres.');return}
+  try{
+    const existing=await sbFetch('/rest/v1/profiles?select=id&or=(username.eq.'+encodeURIComponent(username)+',email.eq.'+encodeURIComponent(email)+')&limit=1');
+    if(existing.length){showToast('Ese usuario o correo ya está registrado.');return}
+    await signUpSupabase(name,username,email,pass);
+    const profile=await loadProfile();
+    window.__dhProfile=profile;
+    localStorage.setItem('dh_logged_name',profile?.name||name);localStorage.setItem('dh_logged_email',profile?.email||email);
+    closeModal();refreshAccount();showToast('Cuenta creada correctamente.');
+  }catch(e){showToast(e.message||'No se pudo crear la cuenta.')}
+}
+
+async function loginUser(){
+  const identity=document.getElementById('loginIdentity').value.trim().toLowerCase(),pass=document.getElementById('loginPass').value;
+  try{
+    await loginSupabase(identity,pass);
+    const profile=await loadProfile();window.__dhProfile=profile;
+    localStorage.setItem('dh_logged_name',profile?.name||'');localStorage.setItem('dh_logged_email',profile?.email||'');
+    closeModal();refreshAccount();
+    if(profile?.role==='admin'){showAdmin();}else{showToast('Bienvenido, '+(profile?.name||identity).split(' ')[0]+'.')}
+  }catch(e){showToast(e.message||'Usuario o contraseña incorrectos.')}
+}
+
+function currentUser(){return currentRemoteProfile()}
+
+function refreshAccount(){
+  const u=currentRemoteProfile(),pill=document.getElementById('userpill');
+  if(u){pill.style.display='flex';pill.onclick=openAccount;pill.style.cursor='pointer';document.getElementById('avatar').textContent=(u.name||u.username||'D')[0].toUpperCase();document.getElementById('userNameLabel').textContent=u.username||u.name}
+  else{pill.style.display='none'}
+}
+
+async function logoutUser(){
+  try{await fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:Object.assign({},SB_HEADERS,{Authorization:'Bearer '+(sbSession?.access_token||'')})})}catch(_){}
+  clearRemoteSession();closeModal();showToast('Sesión cerrada.');
+}
+
+async function openAccount(){
+  const u=currentRemoteProfile();if(!u){openLogin();return}
+  let orders=[];try{orders=await loadMyOrders()}catch(_){showToast('No se pudieron cargar tus pedidos.')}
+  const content='<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+(u.name||u.username)+'</div><div class="orderMeta">@'+u.username+' · '+u.email+'</div></div><button class="iconBtn danger" onclick="logoutUser()">Cerrar sesión</button></div></div><div class="panel" style="margin-top:12px"><div class="panelHead"><div><h3>Mis compras</h3><p>Historial guardado en Supabase.</p></div></div><div class="panelBody">'+(orders.length?'<div class="accountOrders">'+orders.map(function(s){return orderCardHTML(s)}).join('')+'</div>':'<div class="empty">Todavía no tienes compras registradas.</div>')+'</div></div>';
+  openModal('Mi cuenta',content);
+}
+
+async function startPurchase(id){
+  const p=state.products.find(x=>x.id===id);if(!p)return;
+  if(!currentUser()){await openLogin('<b>Inicia sesión</b> para que tu pedido quede ligado a tu cuenta y puedas consultarlo desde cualquier dispositivo.');return}
+  state.currentProduct=p;state.purchaseStep=1;state.selectedReceipt=null;state.selectedReceiptDataUrl='';renderPurchase();
+}
+
+async function submitPurchase(){
+  const u=currentUser(),player=document.getElementById('playerId').value.trim();
+  if(!u||!player||!state.selectedReceipt){showToast('Completa tu ID y adjunta el comprobante.');return}
+  try{
+    const p=state.currentProduct;
+    const rows=await sbFetch('/rest/v1/orders?select=id&user_id=eq.'+encodeURIComponent(u.id)+'&limit=1');
+    const order=await sbFetch('/rest/v1/orders',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({user_id:u.id,product_id:p.id,product_name:p.name,amount:p.price,player_id:player,status:'Pendiente',receipt_name:state.selectedReceipt})});
+    const created=order?.[0];state.lastOrder=created?.id?created.id.slice(0,8).toUpperCase():'PEDIDO';
+    await sbFetch('/rest/v1/notifications',{method:'POST',body:JSON.stringify({order_id:created?.id||null,type:'telegram',message:'Nueva compra '+state.lastOrder+': '+u.name+' · '+p.name+' · '+money(p.price),read:false})}).catch(()=>{});
+    state.purchaseStep=3;renderPurchase();showToast('Compra registrada en Supabase.');
+  }catch(e){showToast(e.message||'No se pudo registrar el pedido.')}
+}
+
+async function renderRemoteStore(){
+  try{
+    await loadPaymentSettings();
+    await ensureSeedProducts();
+    await loadProductsRemote();
+  }catch(e){console.warn('Supabase:',e)}
+  renderStore();installSocialBanner();refreshAccount();
+}
+
+async function bootDiamondHub(){
+  try{
+    const hash=new URLSearchParams(window.location.hash.replace(/^#/,'').replace(/^\?/,'').replace(/&/g,'&'));
+    const access=hash.get('access_token'),refresh=hash.get('refresh_token');
+    if(access){
+      sbSession={access_token:access,refresh_token:refresh};
+      localStorage.setItem('dh_access_token',access);
+      if(refresh)localStorage.setItem('dh_refresh_token',refresh);
+      history.replaceState({},document.title,window.location.pathname+window.location.search);
+    }
+    await loadSession();
+    if(sbSession?.user)window.__dhProfile=await loadProfile();
+  }catch(_){clearRemoteSession()}
+  await renderRemoteStore();
+}
+
+bootDiamondHub();
+</script>
+ </body>
+ </html>
