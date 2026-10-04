@@ -2038,6 +2038,92 @@ setTimeout(function(){initRealtime()},600);
     try{if(typeof window.dhRenderPage==='function')window.dhRenderPage()}catch(_){}
   },250);
 })();
+
+(function(){
+  function finalCategoryList(){
+    const out=[],add=function(v){v=String(v||'').trim();if(v&&v.toLowerCase()!=='todos'&&!out.some(function(x){return x.toLowerCase()===v.toLowerCase()}))out.push(v)};
+    try{const a=JSON.parse(localStorage.getItem('dh_categories')||'[]');if(Array.isArray(a))a.forEach(add)}catch(_){}
+    const saved=state.settings?.theme?.dhCategories;if(Array.isArray(saved))saved.forEach(add);
+    state.products.forEach(function(p){add(p.category)});
+    return out;
+  }
+  async function finalSaveCategoryList(list){
+    const clean=[];list.forEach(function(c){c=String(c||'').trim();if(c&&c.toLowerCase()!=='todos'&&!clean.some(function(x){return x.toLowerCase()===c.toLowerCase()}))clean.push(c)});
+    state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};state.settings.theme.dhCategories=clean.slice();
+    localStorage.setItem('dh_categories',JSON.stringify(clean));
+    localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+    try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme)})})}catch(_){ }
+    return clean;
+  }
+  async function finalEnsureCategorySection(name){
+    name=String(name||'').trim();if(!name||name.toLowerCase()==='general'||name.toLowerCase()==='todos')return;
+    state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};
+    const saved=state.settings.theme.dhLayout;
+    const layout=saved&&Array.isArray(saved.blocks)?{blocks:saved.blocks.slice()}:easyLayout();
+    const exists=layout.blocks.some(function(b){return b.type==='products'&&String(b.categoryFilter||'').trim().toLowerCase()===name.toLowerCase()});
+    if(exists)return;
+    layout.blocks.push({id:'category-'+Date.now(),type:'products',visible:true,title:name,description:'Productos de '+name+'.',categoryFilter:name,styles:{},size:{width:100,height:0,imageFit:'cover',ratio:''}});
+    state.settings.theme.dhLayout=layout;localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+    try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme)})})}catch(_){ }
+  }
+  function finalRenderCategorySections(){
+    const layout=typeof easyLayout==='function'?easyLayout():{blocks:[]};
+    document.querySelectorAll('.dh-layout-block[data-dh-block]').forEach(function(el){
+      const id=el.getAttribute('data-dh-block'),b=layout.blocks.find(function(x){return x.id===id});
+      if(!b||b.type!=='products'||id==='packs')return;
+      const grid=el.querySelector('.productGrid');if(!grid)return;
+      const cat=String(b.categoryFilter||'').trim().toLowerCase();
+      const products=cat?state.products.filter(function(p){return String(p.category||'').trim().toLowerCase()===cat}):[];
+      grid.innerHTML=products.length?products.map(productCardHTML).join(''):'<div class="empty" style="grid-column:1/-1">Esta sección no tiene productos de esta categoría.</div>';
+      const filters=el.querySelector('.filters');if(filters)filters.style.display='none';
+      grid.id='productGrid-'+id;
+    });
+  }
+  window.dhOpenAdminSettings=function(){
+    if(currentRemoteProfile()?.role!=='admin'){showToast('Inicia sesión como administrador.');return}
+    document.getElementById('storeView').style.display='none';
+    document.getElementById('adminView').style.display='block';
+    localStorage.setItem('dh_last_view','admin');
+    state.adminTab='settings';
+    document.querySelectorAll('.sideNav button').forEach(function(b){b.classList.remove('active')});
+    document.getElementById('nav-settings')?.classList.add('active');
+    renderAdmin();
+    refreshAccount();
+  };
+  const oldSettingsClick=document.getElementById('nav-settings');
+  if(oldSettingsClick)oldSettingsClick.onclick=function(e){e.preventDefault();window.dhOpenAdminSettings()};
+  const oldAppearance=document.querySelector('#dhEasyEditor [data-easy="appearance"]');
+  if(oldAppearance)oldAppearance.onclick=function(){window.dhOpenAdminSettings()};
+
+  const oldEasySaveProduct=window.dhEasySaveProduct;
+  window.dhEasySaveProduct=async function(){
+    const cat=(document.getElementById('easyPfCat')?.value||'').trim();
+    await oldEasySaveProduct();
+    if(cat&&cat!=='__new__'&&cat.toLowerCase()!=='general'){
+      await finalSaveCategoryList(finalCategoryList().concat(cat));
+      await finalEnsureCategorySection(cat);
+      if(typeof easyRefresh==='function')easyRefresh();
+      setTimeout(finalRenderCategorySections,80);
+    }
+  };
+  const oldSaveProduct=window.saveProduct;
+  window.saveProduct=async function(id){
+    const cat=(document.getElementById('easyPfCat')?.value||'').trim();
+    await oldSaveProduct(id);
+    if(cat&&cat!=='__new__'&&cat.toLowerCase()!=='general'){
+      await finalSaveCategoryList(finalCategoryList().concat(cat));
+      await finalEnsureCategorySection(cat);
+      if(typeof easyRefresh==='function')easyRefresh();
+      setTimeout(finalRenderCategorySections,80);
+    }
+  };
+  const oldRenderPage=window.dhRenderPage;
+  window.dhRenderPage=function(){
+    if(typeof oldRenderPage==='function')oldRenderPage();
+    setTimeout(finalRenderCategorySections,25);
+  };
+  setTimeout(function(){finalRenderCategorySections();easySyncPanel&&easySyncPanel()},120);
+})();
 </script>
  </body>
  </html>
