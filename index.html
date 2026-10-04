@@ -560,6 +560,24 @@ async function dhSignedStorageUrl(bucket,path){
   return url?(String(url).startsWith('http')?url:SB_URL+url):null;
 }
 
+async function dhReceiptBlobUrl(s){
+  if(!s)throw new Error('Pedido no encontrado.');
+  let path=s.storagePath||'';
+  if(s.dbId){
+    try{
+      const rows=await sbFetch('/rest/v1/receipts?select=file_name,storage_path&order_id=eq.'+encodeURIComponent(s.dbId)+'&limit=1');
+      if(rows?.[0]){path=rows[0].storage_path||path;s.receiptName=rows[0].file_name||s.receiptName}
+    }catch(_){ }
+  }
+  if(!path&&s.userId&&s.dbId&&s.receiptName)path=dhStoragePath(s.userId,s.dbId,s.receiptName);
+  if(!path)throw new Error('Este pedido no tiene un comprobante registrado.');
+  const response=await fetch(SB_URL+'/storage/v1/object/authenticated/receipts/'+dhEncodedStoragePath(path),{method:'GET',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||'')}});
+  if(!response.ok){const data=await response.json().catch(function(){return {}});throw new Error(data.message||data.error||'Supabase no permitió leer el comprobante.');}
+  const blob=await response.blob();
+  s.storagePath=path;
+  return {url:URL.createObjectURL(blob),path,fileName:s.receiptName||'comprobante',type:blob.type};
+}
+
 async function loadAdminOrders(){
   if(currentRemoteProfile()?.role!=='admin')return;
   const rows=await sbFetch('/rest/v1/orders?select=id,user_id,product_id,product_name,amount,player_id,status,created_at,delivery_note,receipt_name&order=created_at.desc');
@@ -956,11 +974,9 @@ async function dhDownloadReceipt(id){
   const s=state.sales.find(function(x){return x.id===id});
   if(!s)return;
   try{
-    const url=await dhReceiptUrl(s),response=await fetch(url);
-    if(!response.ok)throw new Error('No se pudo descargar el archivo.');
-    const blob=await response.blob(),a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);a.download=s.receiptName||'comprobante';document.body.appendChild(a);a.click();a.remove();
-    setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+    const file=await dhReceiptBlobUrl(s),a=document.createElement('a');
+    a.href=file.url;a.download=file.fileName;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(file.url)},3000);
   }catch(e){showToast(e.message||'No se pudo descargar el comprobante.')}
 }
 
@@ -1097,13 +1113,15 @@ async function editSaleById(id){
   let receipt='<div class="notice">No se encontró el comprobante.</div>';
   if(s.dbId){
     try{
-      const url=await dhReceiptUrl(s),ext=String(s.receiptName||'').toLowerCase();
+      const file=await dhReceiptBlobUrl(s),url=file.url,ext=String(file.fileName||s.receiptName||'').toLowerCase();
       if(/\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(ext)){
-        receipt='<div style="padding:10px;border:1px solid var(--border);border-radius:14px;background:#080b14"><img class="receiptThumb" style="width:100%;height:auto;max-height:520px;object-fit:contain" src="'+url+'" alt="Comprobante '+s.id+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><div class="notice" style="display:none">No se pudo renderizar la imagen en el navegador.</div><div style="display:flex;gap:8px;margin-top:10px"><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir original</a><a class="socialLink" download="'+(s.receiptName||'comprobante')+'" href="'+url+'">Descargar</a></div></div>';
+        receipt='<div style="padding:10px;border:1px solid var(--border);border-radius:14px;background:#080b14"><img class="receiptThumb" style="width:100%;height:auto;max-height:520px;object-fit:contain;background:#05070d" src="'+url+'" alt="Comprobante '+s.id+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><div class="notice" style="display:none">No se pudo renderizar la imagen en el navegador. Usa Abrir original o Descargar.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir original</a><button class="secondary" onclick="dhDownloadReceipt(&quot;'+s.id+'&quot;)">Descargar</button></div></div>';
       }else{
-        receipt='<div class="notice"><b>'+String(s.receiptName||'comprobante')+'</b><br><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir comprobante</a></div>';
+        receipt='<div class="notice"><b>'+String(s.receiptName||'comprobante')+'</b><br><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir comprobante</a><button class="secondary" style="margin-left:8px" onclick="dhDownloadReceipt(&quot;'+s.id+'&quot;)">Descargar</button></div>';
       }
-    }catch(e){receipt='<div class="notice">No se pudo abrir el comprobante: '+e.message+'</div>'}
+    }catch(e){
+      receipt='<div class="notice">No se pudo abrir el comprobante: '+e.message+'<br><button class="secondary" style="margin-top:8px" onclick="editSaleById(&quot;'+s.id+'&quot;)">Reintentar</button></div>';
+    }
   }
   const fields=s.deliveryType==='account'?'<div class="formGrid"><div class="field"><label>Correo / usuario</label><input id="deliveryUser" value="'+(s.deliveryUser||'')+'"></div><div class="field"><label>Contraseña</label><input id="deliveryPass" value="'+(s.deliveryPass||'')+'"></div></div>':'';
   const action=s.status==='Pendiente'?'<button class="primary" data-id="'+s.id+'" onclick="approvePayment(this.dataset.id)">✓ Confirmar transferencia</button>':s.status==='Transferencia verificada'?'<button class="primary" data-id="'+s.id+'" onclick="deliverOrder(this.dataset.id)">✓ Marcar entrega realizada</button>':'<span class="status ok">✓ Pedido finalizado</span>';
