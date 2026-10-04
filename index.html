@@ -104,14 +104,13 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--dh-font,Inter
       <div class="navlinks">
         <button onclick="scrollToId('packs')">Diamantes</button>
         <button onclick="scrollToId('promos')">Promociones</button>
-        <button onclick="openLogin()">Mi cuenta</button>
       </div>
       <div class="navright">
         <div id="userpill" class="userpill"><div class="avatar" id="avatar">D</div><span id="userNameLabel">Mi cuenta</span></div>
         <button id="ordersNav" class="secondary" style="display:none" onclick="openAccount()">Mis compras</button>
         <button id="adminStoreNav" class="primary" style="display:none" onclick="showAdmin()">Panel admin</button>
-        <button class="secondary" onclick="openRegister()">Registrarse</button>
-        <button class="primary" onclick="openLogin()">Ingresar</button>
+        <button id="registerNav" class="secondary" onclick="openRegister()">Registrarse</button>
+        <button id="loginNav" class="primary" onclick="openLogin()">Ingresar</button>
       </div>
     </div>
   </div>
@@ -125,7 +124,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--dh-font,Inter
           <p>Selecciona tu paquete, revisa los datos de transferencia y envía tu comprobante. El proceso está pensado para comprar desde el celular en pocos pasos.</p>
           <div class="heroActions">
             <button class="primary" onclick="scrollToId('packs')">Ver paquetes</button>
-            <button class="secondary" onclick="openRegister()">Crear cuenta</button>
+            <button id="createAccountHero" class="secondary" onclick="openRegister()">Crear cuenta</button>
           </div>
           <div class="stats">
             <div class="stat"><b>3 pasos</b><span>para completar una compra</span></div>
@@ -543,7 +542,18 @@ async function dhDeleteStorageObject(bucket,path){
 }
 
 async function dhSignedStorageUrl(bucket,path){
-  const response=await fetch(SB_URL+'/storage/v1/object/sign/'+bucket+'/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':'application/json'},body:JSON.stringify({expiresIn:3600})});
+  const clean=String(path||'').replace(/^\/+|\s+$/g,'');
+  if(!clean)throw new Error('La ruta del archivo está vacía.');
+  if(window.supabase?.createClient&&sbSession?.access_token){
+    try{
+      const client=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+      try{client.realtime.setAuth(sbSession.access_token)}catch(_){}
+      const result=await client.storage.from(bucket).createSignedUrl(clean,3600);
+      if(!result.error&&result.data?.signedUrl)return result.data.signedUrl;
+    }catch(e){console.warn('Signed URL por SDK:',e)}
+  }
+  const apiPath=clean.split('/').map(encodeURIComponent).join('/');
+  const response=await fetch(SB_URL+'/storage/v1/object/sign/'+bucket+'/'+apiPath,{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':'application/json'},body:JSON.stringify({expiresIn:3600})});
   const data=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(data.message||data.error||'No se pudo abrir el comprobante.');
   const url=data.signedURL||data.signed_url;
@@ -932,6 +942,18 @@ async function dhReceiptUrl(s){
   return await dhSignedStorageUrl('receipts',path);
 }
 
+async function dhDownloadReceipt(id){
+  const s=state.sales.find(function(x){return x.id===id});
+  if(!s)return;
+  try{
+    const url=await dhReceiptUrl(s),response=await fetch(url);
+    if(!response.ok)throw new Error('No se pudo descargar el archivo.');
+    const blob=await response.blob(),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=s.receiptName||'comprobante';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  }catch(e){showToast(e.message||'No se pudo descargar el comprobante.')}
+}
+
 function filteredSales(){
   const q=String(state.saleSearch||'').trim().toLowerCase();
   if(!q)return state.sales;
@@ -1116,6 +1138,295 @@ applyStoreBackground();
 applyTheme();
 bootDiamondHub();
 setTimeout(function(){initRealtime()},600);
+</script>
+<script>
+(function(){
+  if(!document.getElementById('dhInlineEditorStyle')){
+    const style=document.createElement('style');
+    style.id='dhInlineEditorStyle';
+    style.textContent='#dhInlineEditorBar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:120;display:none;align-items:center;gap:7px;padding:9px 11px;border:1px solid rgba(139,92,246,.35);border-radius:15px;background:rgba(10,13,25,.94);backdrop-filter:blur(16px);box-shadow:0 18px 50px rgba(0,0,0,.4);font-size:12px;color:#e9ecf8}#dhInlineEditorBar b{margin:0 4px 0 2px}#dhInlineEditorBar button{border:1px solid #2b3453;background:rgba(255,255,255,.05);color:#dfe4f4;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800}#dhInlineEditorBar button:hover{background:rgba(139,92,246,.16)}.dh-edit-mode .dh-layout-block{outline:2px dashed rgba(139,92,246,.55);outline-offset:-3px;cursor:grab}.dh-edit-mode .dh-layout-block:hover{outline-color:#22d3ee}.dh-edit-mode [data-dh-editable]{outline:1px dashed rgba(34,211,238,.4);outline-offset:2px;cursor:text}.dh-edit-mode [data-dh-editable]:hover{background:rgba(34,211,238,.05)}.dh-layout-block[draggable="true"]{user-select:none}';
+    document.head.appendChild(style);
+  }
+  const DH_DEFAULT_LAYOUT={
+    blocks:[
+      {id:'hero',type:'hero',visible:true,kicker:'✦ Entrega rápida · Compra simple',title:'Diamantes de Free Fire sin vueltas.',description:'Selecciona tu paquete, revisa los datos de transferencia y envía tu comprobante. El proceso está pensado para comprar desde el celular en pocos pasos.',buttons:[{label:'Ver paquetes',action:{type:'scroll',target:'packs'}},{label:'Crear cuenta',action:{type:'register'}}],styles:{}},
+      {id:'promo',type:'promo',visible:true,title:'Bonificación de temporada',description:'Este espacio puede mostrar tus flyers, promociones, noticias o banners cargados desde el panel de administrador.',button:{label:'Ver promoción',action:{type:'scroll',target:'promos'}},imageUrl:'',styles:{}},
+      {id:'trust',type:'trust',visible:true,title:'Compra segura',description:'Todo lo necesario para completar una compra.',styles:{}},
+      {id:'packs',type:'products',visible:true,title:'Elige tu paquete',description:'Los productos se pueden crear y modificar desde el panel de administrador.',styles:{}}
+    ]
+  };
+  function dhClone(v){return JSON.parse(JSON.stringify(v))}
+  function dhLayout(){
+    const base=dhClone(DH_DEFAULT_LAYOUT);
+    const promoBase=base.blocks.find(function(b){return b.type==='promo'});
+    if(promoBase){promoBase.id='promos';promoBase.buttons=promoBase.buttons||[promoBase.button||{label:'Ver promoción',action:{type:'scroll',target:'promos'}}];delete promoBase.button}
+    const current=state.settings?.theme?.dhLayout;
+    if(!current)return base;
+    const byId=Object.fromEntries((current.blocks||[]).map(function(b){const copy=Object.assign({},b);if(copy.id==='promo')copy.id='promos';if(copy.type==='promo'&&!copy.buttons)copy.buttons=[copy.button||{label:'Ver promoción',action:{type:'scroll',target:'packs'}}];delete copy.button;return [copy.id,copy]}));
+    base.blocks=base.blocks.map(function(b){return Object.assign({},b,byId[b.id]||{})});
+    (current.blocks||[]).filter(function(b){return !base.blocks.some(function(x){return x.id===b.id})}).forEach(function(b){base.blocks.push(b)});
+    return base;
+  }
+  function dhEscape(v){
+    return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function dhStyle(s){
+    s=s||{};
+    const out=[];
+    if(s.color)out.push('color:'+s.color);
+    if(s.fontFamily)out.push('font-family:'+s.fontFamily);
+    if(s.fontSize)out.push('font-size:'+s.fontSize+'px');
+    if(s.fontWeight)out.push('font-weight:'+s.fontWeight);
+    if(s.fontStyle)out.push('font-style:'+s.fontStyle);
+    if(s.textDecoration)out.push('text-decoration:'+s.textDecoration);
+    return out.join(';');
+  }
+  function dhTextStyle(block,key){return (block.styles&&block.styles[key])||{}}
+  function dhButtonAction(action){
+    action=action||{type:'none'};
+    if(action.type==='scroll')return "scrollToId('"+String(action.target||'').replace(/'/g,"\\'")+"')";
+    if(action.type==='register')return "openRegister()";
+    if(action.type==='login')return "openLogin()";
+    if(action.type==='url')return "window.open('"+String(action.target||'#').replace(/'/g,"\\'")+"','_blank','noopener')";
+    return "showToast('Botón sin acción configurada.')";
+  }
+  function dhButtonHTML(btn,index){
+    if(!btn||btn.visible===false)return '';
+    const label=dhEscape(btn.label||'Botón');
+    return '<button class="'+(index===0?'primary':'secondary')+' dh-layout-button" data-dh-button="'+index+'" onclick="'+dhButtonAction(btn.action)+'" style="'+dhStyle(btn.style||{})+'">'+label+'</button>';
+  }
+  function dhBlockHeader(block){
+    const style=dhStyle(dhTextStyle(block,'title'));
+    const bg=block.bgColor?' style="background:'+dhEscape(block.bgColor)+'"':'';
+    return {style:style,bg:bg};
+  }
+  function dhHero(block){
+    const hs=dhBlockHeader(block);
+    return '<section class="hero dh-layout-block" data-dh-block="'+block.id+'" id="'+block.id+'" draggable="false">'+
+      '<div class="container heroGrid">'+
+      '<div class="heroCard">'+
+      '<span class="kicker dh-editable-text" data-dh-editable="1" data-dh-text-key="kicker" style="'+dhStyle(dhTextStyle(block,'kicker'))+'">'+dhEscape(block.kicker||'')+'</span>'+
+      '<h1 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+hs.style+'">'+dhEscape(block.title||'')+'</h1>'+
+      '<p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'')+'</p>'+
+      '<div class="heroActions">'+(block.buttons||[]).map(dhButtonHTML).join('')+'</div>'+
+      '<div class="stats"><div class="stat"><b>3 pasos</b><span>para completar una compra</span></div><div class="stat"><b>24/7</b><span>puedes enviar solicitudes</span></div><div class="stat"><b>Panel</b><span>historial de tus pedidos</span></div></div>'+
+      '</div></div></section>';
+  }
+  function dhPromo(block){
+    const image=block.imageUrl||state.settings?.promoUrl||state.settings?.bannerUrl||'';
+    return '<section class="section dh-layout-block" data-dh-block="'+block.id+'" id="'+block.id+'">'+
+      '<div class="container"><div class="promoHero" style="'+(block.bgColor?'background:'+dhEscape(block.bgColor)+';':'')+(image?'background-image:url(&quot;'+dhEscape(image)+'&quot);background-size:cover;background-position:center;':'')+'">'+
+      (!image?'<div class="promoImage"><div class="diamond"></div><span>Imagen promocional</span></div>':'')+
+      '<div><div style="color:#83e9f8;font-size:11px;font-weight:900;letter-spacing:.8px;text-transform:uppercase">Promo</div>'+
+      '<h3 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+dhStyle(dhTextStyle(block,'title'))+'">'+dhEscape(block.title||'')+'</h3>'+
+      '<p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'')+'</p></div>'+
+      '<div class="heroActions">'+dhButtonHTML(block.button,0)+'</div></div></div></section>';
+  }
+  function dhTrust(block){
+    return '<section class="section dh-layout-block" data-dh-block="'+block.id+'" id="'+block.id+'"><div class="container"><div class="sectionHead"><div><h2 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+dhStyle(dhTextStyle(block,'title'))+'">'+dhEscape(block.title||'Compra segura')+'</h2><p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'Todo lo necesario para completar una compra.')+'</p></div></div><div class="trust"><div class="trustBox"><div class="trustIcon">↯</div><div><b>Compra guiada</b><span>Todo por botones y pasos claros.</span></div></div><div class="trustBox"><div class="trustIcon">▣</div><div><b>Comprobante</b><span>Adjunta tu captura de pago.</span></div></div><div class="trustBox"><div class="trustIcon">✓</div><div><b>Seguimiento</b><span>Consulta tus pedidos desde tu cuenta.</span></div></div></div></div></section>';
+  }
+  function dhProducts(block){
+    return '<section id="'+block.id+'" class="section dh-layout-block" data-dh-block="'+block.id+'"><div class="container"><div class="sectionHead"><div><h2 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+dhStyle(dhTextStyle(block,'title'))+'">'+dhEscape(block.title||'Elige tu paquete')+'</h2><p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'Los productos se pueden crear y modificar desde el panel de administrador.')+'</p></div><div class="filters" id="categoryFilters"></div></div><div id="productGrid" class="productGrid"></div></div></section>';
+  }
+  function dhCustom(block){
+    const image=block.imageUrl||'';
+    const content=image?
+      '<div class="bannerCard" style="background-image:url(&quot;'+dhEscape(image)+'&quot;);background-size:cover;background-position:center;min-height:250px"><div class="bannerVisual"></div><div class="content"><h4 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+dhStyle(dhTextStyle(block,'title'))+'">'+dhEscape(block.title||'')+'</h4><p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'')+'</p><div class="heroActions">'+(block.buttons||[]).map(dhButtonHTML).join('')+'</div></div></div>':
+      '<div class="heroCard" style="min-height:220px;'+(block.bgColor?'background:'+dhEscape(block.bgColor)+';':'')+'"><h2 class="dh-editable-text" data-dh-editable="1" data-dh-text-key="title" style="'+dhStyle(dhTextStyle(block,'title'))+'">'+dhEscape(block.title||'Nuevo apartado')+'</h2><p class="dh-editable-text" data-dh-editable="1" data-dh-text-key="description" style="'+dhStyle(dhTextStyle(block,'description'))+'">'+dhEscape(block.description||'')+'</p><div class="heroActions">'+(block.buttons||[]).map(dhButtonHTML).join('')+'</div></div>';
+    return '<section id="'+block.id+'" class="section dh-layout-block" data-dh-block="'+block.id+'"><div class="container">'+content+'</div></section>';
+  }
+  function dhRenderPage(){
+    if(!document.getElementById('storeView'))return;
+    const layout=dhLayout();
+    const main=document.querySelector('#storeView main');
+    if(!main)return;
+    main.innerHTML=layout.blocks.filter(function(b){return b.visible!==false}).map(function(b){
+      if(b.type==='hero')return dhHero(b);
+      if(b.type==='promo')return dhPromo(b);
+      if(b.type==='trust')return dhTrust(b);
+      if(b.type==='products')return dhProducts(b);
+      return dhCustom(b);
+    }).join('');
+    const filters=document.getElementById('categoryFilters'),grid=document.getElementById('productGrid');
+    if(filters&&grid){
+      const cats=['Todos'].concat(Array.from(new Set(state.products.map(function(p){return p.category||'General'}))));
+      filters.innerHTML=cats.map(function(c){return '<button class="chip '+(state.category===c?'active':'')+'" data-category="'+dhEscape(c)+'" onclick="setCategory(this.dataset.category)">'+dhEscape(c)+'</button>'}).join('');
+      const filtered=state.category==='Todos'?state.products:state.products.filter(function(p){return (p.category||'General')===state.category});
+      grid.innerHTML=filtered.map(productCardHTML).join('');
+    }
+    installSocialBanner();
+    applyStoreMedia();
+    applyTheme();
+    applyStoreBackground();
+    if(currentRemoteProfile()?.role==='admin')dhAdminEditorVisibility();
+  }
+  function dhPersistLayout(layout){
+    state.settings=state.settings||{};
+    state.settings.theme=state.settings.theme||dhTheme();
+    state.settings.theme.dhLayout=layout;
+    localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+    sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme)})}).catch(function(e){console.warn('No se pudo guardar el contenido:',e)});
+    applyTheme();
+  }
+  function dhFindBlock(id){return dhLayout().blocks.find(function(b){return b.id===id})}
+  function dhOpenBlockEditor(id){
+    const b=dhFindBlock(id);if(!b)return;
+    const layout=dhLayout();
+    const targets=layout.blocks.filter(function(x){return x.visible!==false}).map(function(x){return '<option value="scroll:'+dhEscape(x.id)+'">'+dhEscape(x.title||x.id)+'</option>'}).join('');
+    const isSystem=['hero','promo','trust','packs'].includes(id);
+    const imageField=b.type==='promo'||b.type==='banner'||b.type==='section'?' <div class="field"><label>URL de imagen</label><input id="dhBlockImage" value="'+dhEscape(b.imageUrl||'')+'" placeholder="https://..."></div>':'';
+    openModal('Editar bloque · '+(b.title||id),
+      '<div class="formGrid">'+
+      '<div class="field"><label>Título</label><input id="dhBlockTitle" value="'+dhEscape(b.title||b.kicker||'')+'"></div>'+
+      '<div class="field"><label>Texto / descripción</label><input id="dhBlockDescription" value="'+dhEscape(b.description||'')+'"></div>'+
+      '<div class="field"><label>Color de fondo</label><input id="dhBlockBg" type="color" value="'+(b.bgColor||'#111526')+'" style="height:42px"></div>'+
+      imageField+
+      '</div>'+
+      '<div class="panel"><div class="panelHead"><div><h3>Texto y tipografía</h3><p>Selecciona qué texto quieres personalizar.</p></div></div><div class="panelBody">'+
+      '<div class="formGrid"><div class="field"><label>Elemento</label><select id="dhTextTarget"><option value="title">Título</option><option value="description">Descripción</option>'+((b.type==='hero')?'<option value="kicker">Letrero superior</option>':'')+'</select></div><div class="field"><label>Color de letra</label><input id="dhTextColor" type="color" value="'+((b.styles?.title?.color)||'#f4f6ff')+'" style="height:42px"></div><div class="field"><label>Tipografía</label><select id="dhTextFont"><option>Inter</option><option>Arial</option><option>Georgia</option><option>Trebuchet MS</option><option>Verdana</option></select></div><div class="field"><label>Tamaño (px)</label><input id="dhTextSize" type="number" min="8" max="96" value="'+((b.styles?.title?.fontSize)||28)+'"></div><div class="field"><label>Peso</label><select id="dhTextWeight"><option value="400">Normal</option><option value="600">Seminegrita</option><option value="700">Negrita</option><option value="900">Extra negrita</option></select></div><div class="field"><label>Estilo</label><select id="dhTextStyle"><option value="normal">Normal</option><option value="italic">Cursiva</option></select></div></div>'+
+      '<div class="formActions"><button class="secondary" onclick="dhApplyTextStyle()">Aplicar a texto</button></div></div></div>'+
+      '<div class="panel"><div class="panelHead"><div><h3>Botones</h3><p>Agrega, elimina o cambia a qué apartado llevan.</p></div></div><div class="panelBody">'+
+      '<div id="dhButtonsEditor">'+dhButtonsEditorHTML(b,targets)+'</div>'+
+      '<div class="formActions"><button class="secondary" onclick="dhAddButton()">＋ Agregar botón</button></div></div></div>'+
+      '<div class="adminOrderActions">'+
+      '<button class="secondary" onclick="dhMoveBlock(&quot;'+dhEscape(id)+'&quot;,-1)">↑ Mover</button>'+
+      '<button class="secondary" onclick="dhMoveBlock(&quot;'+dhEscape(id)+'&quot;,1)">↓ Mover</button>'+
+      (isSystem?'<button class="secondary danger" onclick="dhToggleBlock(&quot;'+dhEscape(id)+'&quot;)">Ocultar bloque</button>':'<button class="secondary danger" onclick="dhDeleteBlock(&quot;'+dhEscape(id)+'&quot;)">Eliminar bloque</button>')+
+      '<button class="primary" onclick="dhSaveBlock(&quot;'+dhEscape(id)+'&quot;)">Guardar cambios</button></div>');
+  }
+  function dhButtonsEditorHTML(b,targets){
+    const arr=[];
+    (b.buttons||[]).forEach(function(btn,i){arr.push('<div class="orderCard dh-btn-edit" data-btn-index="'+i+'" style="margin-bottom:8px"><div class="formGrid"><div class="field"><label>Texto</label><input data-btn-label value="'+dhEscape(btn.label||'Botón')+'"></div><div class="field"><label>Acción</label><select data-btn-action><option value="none">Sin acción</option><option value="register">Registrar</option><option value="login">Ingresar</option><option value="scroll">Ir a apartado</option><option value="url">Abrir enlace</option></select><input data-btn-target placeholder="ID de apartado o URL" value="'+dhEscape(btn.action?.target||'')+'"></div></div><div class="adminOrderActions"><button class="iconBtn" onclick="dhMoveButton('+i+',-1)">↑</button><button class="iconBtn" onclick="dhMoveButton('+i+',1)">↓</button><button class="iconBtn danger" onclick="dhRemoveButton('+i+')">Eliminar</button></div></div>')});
+    return arr.join('')||'<div class="empty">No hay botones en este bloque.</div>';
+  }
+  function dhTempBlock(){
+    const id=document.querySelector('#modalBack [onclick*="dhSaveBlock"]')?.getAttribute('onclick')?.match(/dhSaveBlock\(&quot;([^"]+)/)?.[1];
+    return id?dhFindBlock(id):null;
+  }
+  function dhApplyTextStyle(){
+    const b=dhTempBlock();if(!b)return;
+    const key=document.getElementById('dhTextTarget').value;
+    b.styles=b.styles||{};b.styles[key]=Object.assign({},b.styles[key]||{},{
+      color:document.getElementById('dhTextColor').value,
+      fontFamily:document.getElementById('dhTextFont').value,
+      fontSize:Number(document.getElementById('dhTextSize').value)||28,
+      fontWeight:document.getElementById('dhTextWeight').value,
+      fontStyle:document.getElementById('dhTextStyle').value
+    });
+    showToast('Estilo aplicado. Guarda el bloque para conservarlo.');
+  }
+  function dhReadButtons(){
+    return Array.from(document.querySelectorAll('#dhButtonsEditor .dh-btn-edit')).map(function(row){
+      const action=row.querySelector('[data-btn-action]')?.value||'none',target=row.querySelector('[data-btn-target]')?.value||'';
+      return {label:row.querySelector('[data-btn-label]')?.value.trim()||'Botón',action:{type:action,target:target}};
+    });
+  }
+  function dhAddButton(){
+    const b=dhTempBlock();if(!b)return;
+    b.buttons=b.buttons||[];b.buttons.push({label:'Nuevo botón',action:{type:'scroll',target:'packs'}});
+    document.getElementById('dhButtonsEditor').innerHTML=dhButtonsEditorHTML(b,'');
+  }
+  function dhRemoveButton(i){const b=dhTempBlock();if(!b)return;b.buttons=b.buttons||[];b.buttons.splice(i,1);document.getElementById('dhButtonsEditor').innerHTML=dhButtonsEditorHTML(b,'')}
+  function dhMoveButton(i,d){const b=dhTempBlock();if(!b)return;b.buttons=b.buttons||[];const ni=i+d;if(ni<0||ni>=b.buttons.length)return;const x=b.buttons[i];b.buttons[i]=b.buttons[ni];b.buttons[ni]=x;document.getElementById('dhButtonsEditor').innerHTML=dhButtonsEditorHTML(b,'')}
+  function dhSaveBlock(id){
+    const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===id});if(!b)return;
+    const title=document.getElementById('dhBlockTitle')?.value||b.title||'',desc=document.getElementById('dhBlockDescription')?.value||b.description||'';
+    if(b.type==='hero'){b.kicker=title;b.title=b.title||'';if(document.getElementById('dhTextTarget').value==='title')b.title=title;else b.kicker=title}else b.title=title;
+    b.description=desc;b.bgColor=document.getElementById('dhBlockBg')?.value||b.bgColor||'';
+    if(document.getElementById('dhBlockImage'))b.imageUrl=document.getElementById('dhBlockImage').value.trim();
+    if(b.type==='promo'&&b.button)b.button.label=(document.querySelector('[data-btn-label]')?.value||b.button.label);
+    if(b.buttons)b.buttons=dhReadButtons();
+    dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque actualizado.');
+  }
+  function dhMoveBlock(id,d){
+    const layout=dhLayout(),i=layout.blocks.findIndex(function(x){return x.id===id}),ni=i+d;if(i<0||ni<0||ni>=layout.blocks.length)return;
+    const x=layout.blocks[i];layout.blocks[i]=layout.blocks[ni];layout.blocks[ni]=x;dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque movido.');
+  }
+  function dhToggleBlock(id){const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===id});if(!b)return;b.visible=b.visible===false;dhPersistLayout(layout);closeModal();dhRenderPage()}
+  function dhDeleteBlock(id){const layout=dhLayout();layout.blocks=layout.blocks.filter(function(x){return x.id!==id});dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque eliminado.')}
+  function dhAddSection(type){
+    const isBanner=type==='banner',id='section-'+Date.now();
+    const layout=dhLayout();layout.blocks.push({id:id,type:isBanner?'banner':'section',visible:true,title:isBanner?'Nuevo banner':'Nuevo apartado',description:'Escribe aquí el contenido de este espacio.',imageUrl:'',bgColor:'#111526',buttons:[{label:'Ir a paquetes',action:{type:'scroll',target:'packs'}}],styles:{}});
+    dhPersistLayout(layout);dhRenderPage();showToast(isBanner?'Banner creado.':'Apartado creado.');setTimeout(function(){dhOpenBlockEditor(id)},80);
+  }
+  function dhEditorBar(){
+    let bar=document.getElementById('dhInlineEditorBar');
+    if(bar)return bar;
+    bar=document.createElement('div');bar.id='dhInlineEditorBar';bar.innerHTML='<b>Editor de tienda</b><button data-act="edit">✎ Editar</button><button data-act="section">＋ Apartado</button><button data-act="banner">＋ Banner</button><button data-act="appearance">🎨 Apariencia</button><button data-act="done">✓ Cerrar edición</button>';document.body.appendChild(bar);
+    bar.querySelector('[data-act="edit"]').onclick=function(){document.body.classList.toggle('dh-edit-mode');dhDecorateEditor()};
+    bar.querySelector('[data-act="section"]').onclick=function(){dhAddSection('section')};
+    bar.querySelector('[data-act="banner"]').onclick=function(){dhAddSection('banner')};
+    bar.querySelector('[data-act="appearance"]').onclick=function(){showAdmin();adminTab('settings')};
+    bar.querySelector('[data-act="done"]').onclick=function(){document.body.classList.remove('dh-edit-mode');dhDecorateEditor()};
+    return bar;
+  }
+  function dhDecorateEditor(){
+    const on=document.body.classList.contains('dh-edit-mode');
+    document.querySelectorAll('.dh-layout-block').forEach(function(block){
+      block.setAttribute('draggable',on?'true':'false');
+      block.ondragstart=on?function(e){e.dataTransfer.setData('text/plain',block.getAttribute('data-dh-block'))}:null;
+      block.ondragover=on?function(e){e.preventDefault()}:null;
+      block.ondrop=on?function(e){e.preventDefault();const from=e.dataTransfer.getData('text/plain'),to=block.getAttribute('data-dh-block');if(from&&to&&from!==to)dhReorderBlocks(from,to)}:null;
+      block.onclick=on?function(e){if(e.target.closest('button,a,input,select,textarea,[data-dh-editable]'))return;dhOpenBlockEditor(block.getAttribute('data-dh-block'))}:null;
+    });
+    document.querySelectorAll('[data-dh-editable]').forEach(function(el){
+      el.title=on?'Doble clic para editar este texto':'';
+      el.ondblclick=on?function(e){e.stopPropagation();dhOpenTextEditor(el.closest('.dh-layout-block')?.getAttribute('data-dh-block'),el.getAttribute('data-dh-text-key'))}:null;
+    });
+  }
+  function dhReorderBlocks(from,to){
+    const layout=dhLayout(),a=layout.blocks.findIndex(function(x){return x.id===from}),b=layout.blocks.findIndex(function(x){return x.id===to});if(a<0||b<0)return;
+    const x=layout.blocks.splice(a,1)[0];layout.blocks.splice(b,0,x);dhPersistLayout(layout);dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
+  }
+  function dhOpenTextEditor(blockId,key){
+    const b=dhFindBlock(blockId);if(!b)return;
+    b.styles=b.styles||{};const s=b.styles[key]||{},current=b[key]||'';
+    openModal('Editar texto · '+key,'<div class="field"><label>Texto</label><textarea id="dhInlineText" rows="4">'+dhEscape(current)+'</textarea></div><div class="formGrid"><div class="field"><label>Color</label><input id="dhInlineColor" type="color" value="'+(s.color||'#f4f6ff')+'" style="height:42px"></div><div class="field"><label>Tipografía</label><select id="dhInlineFont"><option>Inter</option><option>Arial</option><option>Georgia</option><option>Trebuchet MS</option><option>Verdana</option></select></div><div class="field"><label>Tamaño</label><input id="dhInlineSize" type="number" min="8" max="96" value="'+(s.fontSize||28)+'"></div><div class="field"><label>Peso</label><select id="dhInlineWeight"><option value="400">Normal</option><option value="700">Negrita</option><option value="900">Extra negrita</option></select></div><div class="field"><label>Estilo</label><select id="dhInlineStyle"><option value="normal">Normal</option><option value="italic">Cursiva</option></select></div></div><div class="modalActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="dhSaveTextEditor(&quot;'+dhEscape(blockId)+'&quot;,&quot;'+dhEscape(key)+'&quot;)">Guardar texto</button></div>');
+  }
+  function dhSaveTextEditor(blockId,key){
+    const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===blockId});if(!b)return;
+    b[key]=document.getElementById('dhInlineText').value;b.styles=b.styles||{};b.styles[key]={color:document.getElementById('dhInlineColor').value,fontFamily:document.getElementById('dhInlineFont').value,fontSize:Number(document.getElementById('dhInlineSize').value)||28,fontWeight:document.getElementById('dhInlineWeight').value,fontStyle:document.getElementById('dhInlineStyle').value};
+    dhPersistLayout(layout);closeModal();dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
+  }
+  function dhAdminEditorVisibility(){
+    const admin=currentRemoteProfile()?.role==='admin';
+    let bar=document.getElementById('dhInlineEditorBar');
+    if(admin){bar=dhEditorBar();bar.style.display=document.getElementById('storeView')?.style.display==='none'?'none':'flex';dhDecorateEditor()}
+    else if(bar){bar.style.display='none';document.body.classList.remove('dh-edit-mode')}
+  }
+  const DH_OLD_REFRESH_ACCOUNT=refreshAccount;
+  refreshAccount=function(){
+    DH_OLD_REFRESH_ACCOUNT();
+    const u=currentRemoteProfile(),r=document.getElementById('registerNav'),l=document.getElementById('loginNav'),c=document.getElementById('createAccountHero');
+    [r,l,c].forEach(function(el){if(el)el.style.display=u?'none':''});
+    dhAdminEditorVisibility();
+  };
+  const DH_OLD_SHOW_STORE=showStore;
+  showStore=function(){DH_OLD_SHOW_STORE();setTimeout(dhAdminEditorVisibility,0)};
+  const DH_OLD_SHOW_ADMIN=showAdmin;
+  showAdmin=function(){DH_OLD_SHOW_ADMIN();dhAdminEditorVisibility()};
+  const DH_OLD_RENDER_STORE=renderStore;
+  renderStore=function(){dhRenderPage();refreshAccount()};
+  const originalLoadPayment=loadPaymentSettings;
+  loadPaymentSettings=async function(){await originalLoadPayment();applyTheme();if(currentRemoteProfile()?.role==='admin')dhAdminEditorVisibility()};
+  const originalApplyTheme=applyTheme;
+  applyTheme=function(){originalApplyTheme();dhAdminEditorVisibility()};
+  window.dhOpenBlockEditor=dhOpenBlockEditor;
+  window.dhOpenTextEditor=dhOpenTextEditor;
+  window.dhSaveTextEditor=dhSaveTextEditor;
+  window.dhSaveBlock=dhSaveBlock;
+  window.dhApplyTextStyle=dhApplyTextStyle;
+  window.dhAddButton=dhAddButton;
+  window.dhRemoveButton=dhRemoveButton;
+  window.dhMoveButton=dhMoveButton;
+  window.dhMoveBlock=dhMoveBlock;
+  window.dhToggleBlock=dhToggleBlock;
+  window.dhDeleteBlock=dhDeleteBlock;
+  window.dhAddSection=dhAddSection;
+  window.dhRenderPage=dhRenderPage;
+  window.dhAdminEditorVisibility=dhAdminEditorVisibility;
+  setTimeout(function(){dhRenderPage();refreshAccount();dhAdminEditorVisibility()},300);
+})();
 </script>
  </body>
  </html>
