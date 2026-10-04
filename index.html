@@ -99,6 +99,7 @@ h1{font-size:clamp(38px,5vw,63px);line-height:.98;letter-spacing:-2.6px;margin:1
       <div class="navright">
         <div id="userpill" class="userpill"><div class="avatar" id="avatar">D</div><span id="userNameLabel">Mi cuenta</span></div>
         <button id="ordersNav" class="secondary" style="display:none" onclick="openAccount()">Mis compras</button>
+        <button id="adminStoreNav" class="primary" style="display:none" onclick="showAdmin()">Panel admin</button>
         <button class="secondary" onclick="openRegister()">Registrarse</button>
         <button class="primary" onclick="openLogin()">Ingresar</button>
       </div>
@@ -278,9 +279,13 @@ function settingsHTML(){var pay=state.settings.payment||{bank:'Banco Demo',benef
 function renderStore(){var cats=['Todos'].concat(Array.from(new Set(state.products.map(function(p){return p.category}))));var catHtml=cats.map(function(c){var safe=String(c).replace(/'/g,"\\\\'");return '<button class="chip '+(state.category===c?'active':'')+'" data-category="'+safe+'" onclick="setCategory(this.dataset.category)">'+c+'</button>'}).join('');document.getElementById('categoryFilters').innerHTML=catHtml;var filtered=state.category==='Todos'?state.products:state.products.filter(function(p){return p.category===state.category});document.getElementById('productGrid').innerHTML=filtered.map(function(p){return '<article class="product"><div class="productVisual"><div class="miniDiamond"></div></div><div class="productBody"><div class="productTop"><div><div class="productName">'+p.name+'</div><div class="productMeta">'+((p.kind||'diamonds')==='account'?'Entrega de datos de acceso':'Entrega a ID de jugador')+'</div></div><span class="badge">'+(p.tag||'Oferta')+'</span></div><div class="productBottom"><div class="price">'+money(p.price)+'</div><button class="buy" onclick="startPurchase('+p.id+')">Comprar</button></div></div></article>'}).join('');installSocialBanner()}
 function setCategory(c){state.category=c;renderStore()}
 const SB_URL='https://wfbhmwxzdqifzydgltou.supabase.co';
+const TELEGRAM_FUNCTION_URL=SB_URL+'/functions/v1/notify-telegram';
 const SB_KEY='sb_publishable_xzYWTmy8ykox6nPgmfXH7g_-1LqirUa';
 const SB_HEADERS={'apikey':SB_KEY,'Content-Type':'application/json'};
 let sbSession=null;
+const SESSION_IDLE_MS=30*60*1000;
+let idleTimer=null;
+let activityThrottle=null;
 
 async function sbFetch(path,options={}){
   const headers=Object.assign({},SB_HEADERS,options.headers||{});
@@ -325,8 +330,21 @@ async function loginSupabase(identity,pass){
 }
 
 async function loadSession(){
-  const access=localStorage.getItem('dh_access_token'),refresh=localStorage.getItem('dh_refresh_token');
-  if(access){sbSession={access_token:access,refresh_token:refresh};try{return await sbFetch('/auth/v1/user')}catch(_){}}
+  const access=localStorage.getItem('dh_access_token'),refresh=localStorage.getItem('dh_refresh_token'),last=Number(localStorage.getItem('dh_last_activity')||0);
+  if(!access)return null;
+  if(last&&Date.now()-last>=SESSION_IDLE_MS){clearRemoteSession();return null}
+  sbSession={access_token:access,refresh_token:refresh};
+  try{return await sbFetch('/auth/v1/user')}catch(_){ }
+  if(refresh){
+    try{
+      const data=await sbAuth('token?grant_type=refresh_token',{refresh_token:refresh});
+      sbSession=data;
+      localStorage.setItem('dh_access_token',data.access_token||'');
+      localStorage.setItem('dh_refresh_token',data.refresh_token||refresh);
+      return await sbFetch('/auth/v1/user');
+    }catch(_){ }
+  }
+  clearRemoteSession();
   return null;
 }
 
@@ -371,8 +389,29 @@ function currentRemoteProfile(){return window.__dhProfile||null}
 
 function clearRemoteSession(){
   sbSession=null;window.__dhProfile=null;
-  localStorage.removeItem('dh_access_token');localStorage.removeItem('dh_refresh_token');localStorage.removeItem('dh_logged_name');localStorage.removeItem('dh_logged_email');
+  clearTimeout(idleTimer);
+  localStorage.removeItem('dh_access_token');localStorage.removeItem('dh_refresh_token');localStorage.removeItem('dh_logged_name');localStorage.removeItem('dh_logged_email');localStorage.removeItem('dh_last_activity');
+  localStorage.removeItem('dh_last_view');
+  document.getElementById('adminView').style.display='none';
+  document.getElementById('storeView').style.display='block';
   refreshAccount();
+}
+
+function registerActivity(){
+  if(!sbSession?.user)return;
+  localStorage.setItem('dh_last_activity',String(Date.now()));
+  clearTimeout(idleTimer);
+  idleTimer=setTimeout(function(){logoutUser(true)},SESSION_IDLE_MS);
+}
+
+function startActivityTracking(){
+  ['click','keydown','touchstart','scroll','mousemove'].forEach(function(evt){
+    window.addEventListener(evt,function(){
+      if(activityThrottle)return;
+      activityThrottle=setTimeout(function(){activityThrottle=null;registerActivity()},500);
+    },{passive:true});
+  });
+  if(sbSession?.user)registerActivity();
 }
 
 async function openLogin(message){
@@ -392,7 +431,7 @@ async function registerUser(){
     const profile=await loadProfile();
     window.__dhProfile=profile||{name:name,username:username,email:email,role:'customer',id:sbSession.user?.id};
     localStorage.setItem('dh_logged_name',profile?.name||name);localStorage.setItem('dh_logged_email',profile?.email||email);
-    closeModal();refreshAccount();showToast('Cuenta creada correctamente.');
+    registerActivity();closeModal();refreshAccount();showToast('Cuenta creada correctamente.');
   }catch(e){showToast(e.message||'No se pudo crear la cuenta.')}
 }
 
@@ -402,7 +441,7 @@ async function loginUser(){
     await loginSupabase(identity,pass);
     const profile=await loadProfile();window.__dhProfile=profile;
     localStorage.setItem('dh_logged_name',profile?.name||'');localStorage.setItem('dh_logged_email',profile?.email||'');
-    closeModal();refreshAccount();
+    registerActivity();closeModal();refreshAccount();
     if(profile?.role==='admin'){showAdmin();}else{showToast('Bienvenido, '+(profile?.name||identity).split(' ')[0]+'.')}
   }catch(e){showToast(e.message||'Usuario o contraseña incorrectos.')}
 }
@@ -416,9 +455,9 @@ function refreshAccount(){
   else{pill.style.display='none';if(ordersNav)ordersNav.style.display='none'}
 }
 
-async function logoutUser(){
+async function logoutUser(silent=false){
   try{await fetch(SB_URL+'/auth/v1/logout',{method:'POST',headers:Object.assign({},SB_HEADERS,{Authorization:'Bearer '+(sbSession?.access_token||'')})})}catch(_){}
-  clearRemoteSession();closeModal();showToast('Sesión cerrada.');
+  clearRemoteSession();closeModal();showToast(silent?'Sesión cerrada por 30 minutos de inactividad.':'Sesión cerrada.');
 }
 
 async function openAccount(){
@@ -467,9 +506,277 @@ async function bootDiamondHub(){
       history.replaceState({},document.title,window.location.pathname+window.location.search);
     }
     await loadSession();
-    if(sbSession?.user)window.__dhProfile=await loadProfile();
+    if(sbSession?.user){window.__dhProfile=await loadProfile();registerActivity();}
   }catch(_){clearRemoteSession()}
+  startActivityTracking();
   await renderRemoteStore();
+  if(window.__dhProfile?.role==='admin'&&localStorage.getItem('dh_last_view')==='admin'){showAdmin()}else{showStore()}
+}
+
+function dhSafeFileName(name){return String(name||'comprobante').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]+/g,'_').replace(/^_+|_+$/g,'')||'comprobante'}
+function dhStoragePath(userId,orderId,fileName){return String(userId)+'/'+String(orderId)+'/'+dhSafeFileName(fileName)}
+function dhEncodedStoragePath(path){return path.split('/').map(encodeURIComponent).join('/')}
+
+async function dhUploadReceipt(file,userId,orderId){
+  const path=dhStoragePath(userId,orderId,file.name);
+  const response=await fetch(SB_URL+'/storage/v1/object/receipts/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.message||data.error||'No se pudo subir el comprobante.');
+  return path;
+}
+
+async function dhDeleteStorageObject(bucket,path){
+  try{await fetch(SB_URL+'/storage/v1/object/'+bucket,{method:'DELETE',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':'application/json'},body:JSON.stringify({prefixes:[path]})})}catch(_){}
+}
+
+async function dhSignedStorageUrl(bucket,path){
+  const response=await fetch(SB_URL+'/storage/v1/object/sign/'+bucket+'/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':'application/json'},body:JSON.stringify({expiresIn:3600})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.message||data.error||'No se pudo abrir el comprobante.');
+  const url=data.signedURL||data.signed_url;
+  return url?(String(url).startsWith('http')?url:SB_URL+url):null;
+}
+
+async function loadAdminOrders(){
+  if(currentRemoteProfile()?.role!=='admin')return;
+  const rows=await sbFetch('/rest/v1/orders?select=id,user_id,product_id,product_name,amount,player_id,status,created_at,delivery_note,receipt_name&order=created_at.desc');
+  const remote=rows.map(function(o){
+    const p=state.products.find(function(x){return String(x.id)===String(o.product_id)});
+    return {dbId:o.id,id:o.id.slice(0,8).toUpperCase(),date:new Date(o.created_at).toLocaleString('es-MX'),customer:'Cliente',email:'',username:'',product:o.product_name,amount:Number(o.amount),status:o.status,player:o.player_id,receiptName:o.receipt_name||'',receiptDataUrl:'',userId:o.user_id,deliveryType:p?.kind==='account'?'account':'diamonds',deliveryNote:o.delivery_note||''};
+  });
+  const localOnly=state.sales.filter(function(s){return !s.dbId&&!remote.some(function(r){return r.id===s.id})});
+  state.sales=remote.concat(localOnly);
+  localStorage.setItem('dh_sales',JSON.stringify(state.sales));
+  return remote;
+}
+
+async function refreshAdminOrders(){
+  try{await loadAdminOrders()}catch(e){console.warn('No se pudieron cargar ventas de Supabase:',e)}
+  renderAdmin();
+}
+
+function refreshAccount(){
+  const u=currentRemoteProfile(),pill=document.getElementById('userpill'),ordersNav=document.getElementById('ordersNav'),adminStoreNav=document.getElementById('adminStoreNav');
+  if(u){
+    pill.style.display='flex';pill.onclick=openAccount;pill.style.cursor='pointer';
+    document.getElementById('avatar').textContent=(u.name||u.username||'D')[0].toUpperCase();
+    document.getElementById('userNameLabel').textContent=u.username||u.name;
+    if(ordersNav)ordersNav.style.display='inline-flex';
+    if(adminStoreNav)adminStoreNav.style.display=u.role==='admin'?'inline-flex':'none';
+  }else{
+    pill.style.display='none';
+    if(ordersNav)ordersNav.style.display='none';
+    if(adminStoreNav)adminStoreNav.style.display='none';
+  }
+}
+
+function showAdmin(){
+  document.getElementById('storeView').style.display='none';
+  document.getElementById('adminView').style.display='block';
+  localStorage.setItem('dh_last_view','admin');
+  refreshAccount();
+  adminTab(state.adminTab||'dashboard');
+}
+
+function showStore(){
+  document.getElementById('adminView').style.display='none';
+  document.getElementById('storeView').style.display='block';
+  localStorage.setItem('dh_last_view','store');
+  refreshAccount();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function adminTab(tab){
+  state.adminTab=tab;
+  document.querySelectorAll('.sideNav button').forEach(function(b){b.classList.remove('active')});
+  document.getElementById('nav-'+tab)?.classList.add('active');
+  renderAdmin();
+  if(currentRemoteProfile()?.role==='admin')await refreshAdminOrders();
+}
+
+async function submitPurchase(){
+  const u=currentUser(),player=document.getElementById('playerId').value.trim(),file=state.selectedReceiptFile;
+  if(!u||!player||!file){showToast('Completa tu ID y adjunta el comprobante.');return}
+  const p=state.currentProduct;
+  const orderId=crypto.randomUUID();
+  let storagePath='';
+  try{
+    storagePath=await dhUploadReceipt(file,u.id,orderId);
+    const order=await sbFetch('/rest/v1/orders?select=id',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:orderId,user_id:u.id,product_id:p.id,product_name:p.name,amount:p.price,player_id:player,status:'Pendiente',receipt_name:file.name})});
+    const created=order?.[0]||{id:orderId};
+    await sbFetch('/rest/v1/receipts',{method:'POST',body:JSON.stringify({order_id:created.id,user_id:u.id,file_name:file.name,storage_path:storagePath})}).catch(function(){});
+    const shortId=String(created.id).slice(0,8).toUpperCase();
+    state.lastOrder=shortId;
+    await sbFetch('/rest/v1/notifications',{method:'POST',body:JSON.stringify({order_id:created.id,type:'telegram',message:'Nueva compra '+shortId+': '+u.name+' · '+p.name+' · '+money(p.price),read:false})}).catch(function(){});
+    await notifyTelegram({order_id:shortId,customer:u.name,email:u.email,product:p.name,amount:p.price,player_id:player}).catch(function(e){console.warn('Telegram:',e)});
+    state.purchaseStep=3;renderPurchase();showToast('Compra registrada y comprobante recibido.');
+  }catch(e){
+    if(storagePath)await dhDeleteStorageObject('receipts',storagePath);
+    showToast(e.message||'No se pudo registrar el pedido.');
+  }
+}
+
+async function notifyTelegram(payload){
+  const response=await fetch(TELEGRAM_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||'')},body:JSON.stringify(payload)});
+  const data=await response.json().catch(function(){return {}});
+  if(!response.ok||data.success===false)throw new Error(data.error||data.message||'No se pudo notificar a Telegram.');
+  return data;
+}
+
+function previewReceipt(e){
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  state.selectedReceipt=f.name;state.selectedReceiptFile=f;state.selectedReceiptDataUrl='';
+  const img=document.getElementById('receiptPreview');
+  if(f.type.indexOf('image/')===0){
+    const r=new FileReader();r.onload=function(ev){state.selectedReceiptDataUrl=ev.target.result;img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f);
+  }else if(img){img.style.display='none'}
+}
+
+async function approvePayment(id){
+  const s=state.sales.find(function(x){return x.id===id});if(!s)return;
+  const note=s.deliveryType==='account'?'Pago comprobado. Falta entregar los datos de acceso.':'Pago comprobado. Falta realizar la recarga de diamantes.';
+  try{
+    if(s.dbId)await sbFetch('/rest/v1/orders?id=eq.'+encodeURIComponent(s.dbId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'Transferencia verificada',delivery_note:note})});
+    s.status='Transferencia verificada';s.paymentVerifiedAt=new Date().toLocaleString('es-MX');s.deliveryNote=note;s.adminMessage='El administrador comprobó la transferencia.';
+    save();closeModal();renderAdmin();showToast('Transferencia marcada como verificada.');
+  }catch(e){showToast(e.message||'No se pudo actualizar el pedido.')}
+}
+
+async function deliverOrder(id){
+  const s=state.sales.find(function(x){return x.id===id});if(!s)return;
+  if(s.status!=='Transferencia verificada'){showToast('Primero verifica la transferencia.');return}
+  let user='',pass='';
+  if(s.deliveryType==='account'){
+    user=document.getElementById('deliveryUser').value.trim();
+    pass=document.getElementById('deliveryPass').value;
+    if(!user||!pass){showToast('Agrega usuario/correo y contraseña.');return}
+  }
+  const note=document.getElementById('deliveryNote').value.trim()||(s.deliveryType==='account'?'Datos de acceso entregados.':'Diamantes enviados correctamente.');
+  try{
+    if(s.dbId)await sbFetch('/rest/v1/orders?id=eq.'+encodeURIComponent(s.dbId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'Entrega realizada',delivery_note:note})});
+    if(user){s.deliveryUser=user;s.deliveryPass=pass}
+    s.deliveryNote=note;s.status='Entrega realizada';s.deliveredAt=new Date().toLocaleString('es-MX');
+    save();closeModal();renderAdmin();showToast('Entrega marcada como realizada.');
+  }catch(e){showToast(e.message||'No se pudo actualizar el pedido.')}
+}
+
+async function editSaleById(id){
+  const s=state.sales.find(function(x){return x.id===id});if(!s)return;
+  let receipt='<div class="notice">No hay comprobante disponible.</div>';
+  if(s.dbId&&s.userId&&s.receiptName){
+    try{
+      const path=dhStoragePath(s.userId,s.dbId,s.receiptName),url=await dhSignedStorageUrl('receipts',path);
+      if(url){
+        const isImage=/\.(png|jpe?g|webp|gif)$/i.test(s.receiptName);
+        receipt=isImage?'<img class="receiptThumb" src="'+url+'" alt="Comprobante de '+s.id+'">':'<a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir comprobante PDF</a>';
+      }
+    }catch(e){receipt='<div class="notice">No se pudo abrir el comprobante: '+e.message+'</div>'}
+  }
+  const fields=s.deliveryType==='account'?'<div class="formGrid"><div class="field"><label>Correo / usuario a entregar</label><input id="deliveryUser" value="'+(s.deliveryUser||'')+'" placeholder="correo@cuenta.com"></div><div class="field"><label>Contraseña a entregar</label><input id="deliveryPass" value="'+(s.deliveryPass||'')+'" placeholder="Contraseña"></div></div>':'';
+  const actions=s.status==='Pendiente'?'<button class="primary" data-order-id="'+s.id+'" onclick="approvePayment(this.dataset.orderId)">✓ Confirmar transferencia</button>':s.status==='Transferencia verificada'?'<button class="primary" data-order-id="'+s.id+'" onclick="deliverOrder(this.dataset.orderId)">✓ Marcar entrega realizada</button>':'<span class="status ok">✓ Cliente notificado</span>';
+  openModal('Pedido '+s.id,'<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+(s.customer||'Cliente')+'</div><div class="orderMeta">'+(s.email||'')+' '+(s.username?'· @'+s.username:'')+' · ID Free Fire: '+(s.player||'—')+'</div></div><span class="status '+(s.status==='Entrega realizada'?'ok':'pending')+'">'+s.status+'</span></div><div class="payBox" style="margin-top:12px"><div class="payRow"><span>Producto</span><b>'+s.product+'</b></div><div class="payRow"><span>Total</span><b>'+money(s.amount)+'</b></div><div class="payRow"><span>Tipo</span><b>'+(s.deliveryType==='account'?'Cuenta / acceso':'Diamantes')+'</b></div></div><div style="margin-top:14px;font-size:12px;color:#aeb7d0;font-weight:800">Comprobante</div>'+receipt+fields+'<div class="field" style="margin-top:12px"><label>Mensaje de entrega visible para el cliente</label><textarea id="deliveryNote" rows="3" placeholder="Ej. Tus diamantes ya fueron enviados.">'+(s.deliveryNote||'')+'</textarea></div><div class="adminOrderActions">'+actions+'<button class="secondary" onclick="closeModal()">Cerrar</button></div></div>');
+}
+
+function contentHTML(){
+  return '<div class="adminTop"><div><h1>Contenido</h1><p>Sube el logo, banners y material visual de la tienda.</p></div></div><div class="panel"><div class="panelHead"><div><h3>Logo de la tienda</h3><p>Selecciona el archivo que quieres usar como identidad visual.</p></div></div><div class="panelBody"><div class="filebox"><input id="logoFile" type="file" accept="image/*" onchange="contentUpload(event,\'logo\')"><img id="logoPreview" class="uploadPreview"></div><div class="formActions"><button class="primary" onclick="saveContentMedia(\'logo\')">Guardar logo</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Banner principal</h3><p>Imagen para destacar promociones o anuncios en la página.</p></div></div><div class="panelBody"><div class="filebox"><input id="bannerFile" type="file" accept="image/*" onchange="contentUpload(event,\'banner\')"><img id="bannerPreview" class="uploadPreview"></div><div class="formActions"><button class="primary" onclick="saveContentMedia(\'banner\')">Guardar banner</button></div></div></div><div class="panel"><div class="panelHead"><div><h3>Biblioteca visual</h3><p>El almacenamiento definitivo usa Supabase Storage (bucket público <b>store-media</b>).</p></div></div><div class="panelBody"><div class="notice">Los comprobantes ya usan el bucket privado <b>receipts</b>. Para imágenes públicas de la tienda necesitas crear un bucket público llamado <b>store-media</b> en Supabase Storage.</div></div></div>';
+}
+
+function contentUpload(e,type){
+  const f=e.target.files?.[0];if(!f)return;
+  const id=type==='logo'?'logoPreview':'bannerPreview',img=document.getElementById(id);if(!img)return;
+  const r=new FileReader();r.onload=function(ev){img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f);
+}
+
+async function saveContentMedia(type){
+  const file=document.getElementById(type==='logo'?'logoFile':'bannerFile')?.files?.[0];
+  if(!file){showToast('Selecciona una imagen primero.');return}
+  try{
+    const path='public/'+type+'-'+Date.now()+'-'+dhSafeFileName(file.name);
+    const response=await fetch(SB_URL+'/storage/v1/object/store-media/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':file.type||'image/*','x-upsert':'true'},body:file});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.message||data.error||'No se pudo subir la imagen.');
+    const publicUrl=SB_URL+'/storage/v1/object/public/store-media/'+dhEncodedStoragePath(path);
+    localStorage.setItem(type==='logo'?'dh_store_logo_url':'dh_store_banner_url',publicUrl);
+    applyStoreMedia();
+    showToast(type==='logo'?'Logo guardado.':'Banner guardado.');
+  }catch(e){
+    showToast(e.message||'Crea primero el bucket público store-media en Supabase.');
+  }
+}
+
+function applyStoreMedia(){
+  const logo=localStorage.getItem('dh_store_logo_url'),banner=localStorage.getItem('dh_store_banner_url');
+  document.querySelectorAll('#storeView .brandmark').forEach(function(el){if(logo)el.innerHTML='<img src="'+logo+'" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:12px">';});
+  const promo=document.querySelector('#storeView .promoImage');if(promo&&banner){promo.style.backgroundImage='url("'+banner+'")';promo.style.backgroundSize='cover';promo.style.backgroundPosition='center';const d=promo.querySelector('.diamond');if(d)d.style.display='none';}
+}
+
+const __dhOldRenderStore=renderStore;
+renderStore=function(){__dhOldRenderStore();applyStoreMedia()};
+
+const __dhBaseLoadAdminOrders=loadAdminOrders;
+async function loadAdminOrders(){
+  const remote=await __dhBaseLoadAdminOrders();
+  try{
+    const sales=state.sales.filter(function(s){return s.dbId});
+    const userIds=Array.from(new Set(sales.map(function(s){return s.userId}).filter(Boolean)));
+    if(userIds.length){
+      const profiles=await sbFetch('/rest/v1/profiles?select=id,name,username,email&id=in.('+userIds.join(',')+')');
+      sales.forEach(function(s){
+        const p=profiles.find(function(x){return x.id===s.userId});
+        if(p){s.customer=p.name||p.username||'Cliente';s.username=p.username||'';s.email=p.email||''}
+      });
+    }
+  }catch(_){}
+  try{
+    const notes=await sbFetch('/rest/v1/notifications?select=id,order_id,type,message,read,created_at&order=created_at.desc&limit=20');
+    state.notifications=notes.map(function(n){return {id:n.id,orderId:n.order_id,type:n.type,message:n.message,read:!!n.read,date:new Date(n.created_at).toLocaleString('es-MX')}}).concat((state.notifications||[]).filter(function(n){return !String(n.id).startsWith('NT-')}));
+    localStorage.setItem('dh_notifications',JSON.stringify(state.notifications));
+  }catch(_){}
+  localStorage.setItem('dh_sales',JSON.stringify(state.sales));
+  return remote;
+}
+
+const __dhBaseLoadPaymentSettings=loadPaymentSettings;
+async function loadPaymentSettings(){
+  await __dhBaseLoadPaymentSettings();
+  try{
+    const rows=await sbFetch('/rest/v1/store_settings?select=logo_url,banner_url&id=eq.1&limit=1');
+    if(rows[0]){
+      state.settings.logoUrl=rows[0].logo_url||'';
+      state.settings.bannerUrl=rows[0].banner_url||'';
+    }
+  }catch(_){}
+}
+
+async function saveContentMedia(type){
+  const file=document.getElementById(type==='logo'?'logoFile':'bannerFile')?.files?.[0];
+  if(!file){showToast('Selecciona una imagen primero.');return}
+  try{
+    const path='public/'+type+'-'+Date.now()+'-'+dhSafeFileName(file.name);
+    const response=await fetch(SB_URL+'/storage/v1/object/store-media/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':file.type||'image/*','x-upsert':'true'},body:file});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.message||data.error||'No se pudo subir la imagen.');
+    const publicUrl=SB_URL+'/storage/v1/object/public/store-media/'+dhEncodedStoragePath(path);
+    const column=type==='logo'?'logo_url':'banner_url';
+    state.settings[type==='logo'?'logoUrl':'bannerUrl']=publicUrl;
+    localStorage.setItem(type==='logo'?'dh_store_logo_url':'dh_store_banner_url',publicUrl);
+    try{
+      await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({[column]:publicUrl})});
+      showToast(type==='logo'?'Logo guardado para toda la tienda.':'Banner guardado para toda la tienda.');
+    }catch(_){
+      showToast('Imagen subida. Falta agregar la columna de configuración en Supabase.');
+    }
+    applyStoreMedia();
+  }catch(e){
+    showToast(e.message||'Crea el bucket público store-media y su política de carga para administradores.');
+  }
+}
+
+function applyStoreMedia(){
+  const logo=state.settings?.logoUrl||localStorage.getItem('dh_store_logo_url'),banner=state.settings?.bannerUrl||localStorage.getItem('dh_store_banner_url');
+  document.querySelectorAll('#storeView .brandmark').forEach(function(el){if(logo)el.innerHTML='<img src="'+logo+'" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:12px">';});
+  const promo=document.querySelector('#storeView .promoImage');
+  if(promo&&banner){promo.style.backgroundImage='url("'+banner+'")';promo.style.backgroundSize='cover';promo.style.backgroundPosition='center';const d=promo.querySelector('.diamond');if(d)d.style.display='none';}
 }
 
 bootDiamondHub();
