@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DiamondHub — Tienda de Diamantes</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   color-scheme: dark light;
@@ -84,6 +85,15 @@ h1{font-size:clamp(38px,5vw,63px);line-height:.98;letter-spacing:-2.6px;margin:1
 .accountOrders{display:grid;gap:12px}.orderCard{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:16px;padding:15px}.orderTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.orderTitle{font-weight:850}.orderMeta{font-size:11px;color:var(--muted);margin-top:4px}.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:14px 0}.timelineStep{font-size:10px;text-align:center;padding:8px 5px;border:1px solid var(--border);border-radius:9px;color:#707b98}.timelineStep.done{color:#8bf0c9;border-color:rgba(56,217,150,.2);background:rgba(56,217,150,.06)}.timelineStep.current{color:#f4d883;border-color:rgba(248,196,81,.2);background:rgba(248,196,81,.06)}.deliveryBox{border:1px solid rgba(56,217,150,.2);background:rgba(56,217,150,.05);border-radius:14px;padding:13px;margin-top:12px}.deliveryBox input{background:#0a0e1a}.receiptThumb{max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--border);display:block;margin-top:8px}.adminOrderActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.secretField{position:relative}.secretField input{padding-right:72px}.copySecret{position:absolute;right:7px;bottom:7px;border:1px solid var(--border);background:rgba(255,255,255,.05);color:#cdd4e7;border-radius:7px;padding:5px 7px;font-size:10px}.socialBanner{margin:10px auto 28px;border:1px solid rgba(139,92,246,.22);background:linear-gradient(120deg,rgba(139,92,246,.1),rgba(34,211,238,.055));border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:15px}.socialBanner h3{margin:0 0 4px;font-size:15px}.socialBanner p{margin:0;color:var(--muted);font-size:11px}.socialLinks{display:flex;gap:8px;flex-wrap:wrap}.socialLink{padding:8px 10px;border:1px solid var(--border);border-radius:10px;color:#dce1f0;text-decoration:none;background:rgba(255,255,255,.03);font-size:11px;font-weight:750}.socialLink:hover{background:rgba(255,255,255,.08)}
 @media(max-width:980px){.heroGrid{grid-template-columns:1fr}.productGrid{grid-template-columns:repeat(2,1fr)}.metricGrid{grid-template-columns:repeat(2,1fr)}.adminShell{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--border)}.sideNav{grid-template-columns:repeat(3,1fr)}.sideNav button{text-align:center}.adminMain{padding:21px 16px}.mobileOnly{display:inline-flex}.navlinks{display:none}}
 @media(max-width:650px){.container{padding:0 14px}.hero{padding-top:38px}.heroCard{padding:26px}.heroCard h1{font-size:42px}.stats,.trust,.productGrid,.metricGrid,.bannerGrid{grid-template-columns:1fr}.productGrid{gap:10px}.nav{height:68px}.adminTop{align-items:flex-start;flex-direction:column}.formGrid{grid-template-columns:1fr}.sideNav{grid-template-columns:1fr 1fr}.userpill{display:none}.navright .secondary{display:none}}
+</style>
+<style>
+.adminSearch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.adminSearch input{min-width:260px;flex:1;border:1px solid var(--border);background:#0a0e1a;color:#f3f6ff;border-radius:11px;padding:11px 12px;outline:0}
+.mediaThumb{width:64px;height:46px;border-radius:9px;object-fit:cover;border:1px solid var(--border);background:#0a0e1a}
+.appearanceGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+html,body{background:var(--bg);color:var(--text);font-family:var(--dh-font,Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif)}
+.app{background:var(--dh-page-bg,radial-gradient(circle at 12% 0%,rgba(139,92,246,.2),transparent 30%),radial-gradient(circle at 88% 4%,rgba(34,211,238,.12),transparent 24%),#070912)}
+@media(max-width:650px){.appearanceGrid{grid-template-columns:1fr}.adminSearch input{min-width:0;width:100%}}
 </style>
 </head>
 <body>
@@ -286,6 +296,9 @@ let sbSession=null;
 const SESSION_IDLE_MS=30*60*1000;
 let idleTimer=null;
 let activityThrottle=null;
+let dhRealtimeClient=null;
+let dhRealtimeChannels=[];
+let dhRealtimeRefreshTimer=null;
 
 async function sbFetch(path,options={}){
   const headers=Object.assign({},SB_HEADERS,options.headers||{});
@@ -623,6 +636,50 @@ async function notifyTelegram(payload){
   return data;
 }
 
+async function initRealtime(){
+  try{
+    if(!window.supabase||!window.supabase.createClient)return;
+    if(dhRealtimeClient){try{await Promise.all(dhRealtimeChannels.map(function(ch){return dhRealtimeClient.removeChannel(ch)}))}catch(_){}}
+    dhRealtimeClient=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    if(sbSession?.access_token){try{dhRealtimeClient.realtime.setAuth(sbSession.access_token)}catch(_){}}
+    dhRealtimeChannels=[];
+    const refreshStore=function(){
+      clearTimeout(dhRealtimeRefreshTimer);
+      dhRealtimeRefreshTimer=setTimeout(async function(){
+        try{
+          await loadPaymentSettings();
+          await loadProductsRemote();
+          renderStore();
+          if(currentRemoteProfile()?.role==='admin')renderAdmin();
+        }catch(e){console.warn('Realtime DiamondHub:',e)}
+      },200);
+    };
+    const refreshOrders=function(){
+      if(currentRemoteProfile()?.role==='admin')refreshAdminOrders();
+    };
+    dhRealtimeChannels.push(
+      dhRealtimeClient.channel('dh-products-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'products'},refreshStore)
+        .subscribe(),
+      dhRealtimeClient.channel('dh-settings-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'store_settings'},refreshStore)
+        .subscribe(),
+      dhRealtimeClient.channel('dh-orders-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'orders'},function(payload){
+          if(currentRemoteProfile()?.role==='admin')refreshOrders();
+          else if(sbSession?.user&&payload?.new?.user_id===sbSession.user.id)openAccount().catch(function(){});
+        })
+        .subscribe(),
+      dhRealtimeClient.channel('dh-notifications-live')
+        .on('postgres_changes',{event:'*',schema:'public',table:'notifications'},refreshOrders)
+        .subscribe()
+    );
+    console.log('DiamondHub Realtime conectado.');
+  }catch(e){
+    console.warn('No se pudo iniciar Realtime:',e);
+  }
+}
+
 async function testTelegramConnection(){
   try{
     await notifyTelegram({order_id:'PRUEBA-DH',customer:'Administrador',email:'prueba@diamondhub.local',product:'Mensaje de prueba Telegram',amount:0,player_id:'—'});
@@ -822,11 +879,243 @@ async function submitPurchase(){const u=currentUser(),player=document.getElement
 async function approvePayment(id){const s=state.sales.find(function(x){return x.id===id});if(!s)return;try{if(!s.dbId)throw new Error('Este pedido no está vinculado a Supabase.');const note=s.deliveryType==='account'?'Pago comprobado. Falta entregar los datos de acceso.':'Pago comprobado. Falta realizar la recarga.';await sbFetch('/rest/v1/orders?id=eq.'+encodeURIComponent(s.dbId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'Transferencia verificada',delivery_note:note})});s.status='Transferencia verificada';s.deliveryNote=note;await sbFetch('/rest/v1/notifications',{method:'POST',body:JSON.stringify({order_id:s.dbId,type:'admin',message:'Pago verificado para el pedido '+s.id,read:false})}).catch(function(){});closeModal();await refreshAdminOrders();showToast('Transferencia verificada.')}catch(e){showToast(e.message||'No se pudo verificar el pago.')}}
 async function deliverOrder(id){const s=state.sales.find(function(x){return x.id===id});if(!s)return;if(s.status!=='Transferencia verificada'){showToast('Primero verifica la transferencia.');return}let user='',pass='';if(s.deliveryType==='account'){user=document.getElementById('deliveryUser').value.trim();pass=document.getElementById('deliveryPass').value;if(!user||!pass){showToast('Agrega usuario y contraseña.');return}}const note=document.getElementById('deliveryNote').value.trim()||(s.deliveryType==='account'?'Datos de acceso entregados.':'Diamantes enviados correctamente.');try{await sbFetch('/rest/v1/orders?id=eq.'+encodeURIComponent(s.dbId),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'Entrega realizada',delivery_note:note})});if(user){s.deliveryUser=user;s.deliveryPass=pass}s.status='Entrega realizada';s.deliveryNote=note;closeModal();await refreshAdminOrders();showToast('Entrega marcada como realizada.')}catch(e){showToast(e.message||'No se pudo marcar la entrega.')}}
 async function editSaleById(id){const s=state.sales.find(function(x){return x.id===id});if(!s)return;let receipt='<div class="notice">No se encontró el comprobante.</div>';if(s.dbId&&s.userId&&s.receiptName){try{const path=dhStoragePath(s.userId,s.dbId,s.receiptName),url=await dhSignedStorageUrl('receipts',path);if(url)receipt=/\.(png|jpe?g|webp|gif)$/i.test(s.receiptName)?'<img class="receiptThumb" src="'+url+'" alt="Comprobante de '+s.id+'">':'<a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir comprobante</a>'}catch(e){receipt='<div class="notice">'+e.message+'</div>'}}const fields=s.deliveryType==='account'?'<div class="formGrid"><div class="field"><label>Correo / usuario a entregar</label><input id="deliveryUser" value="'+(s.deliveryUser||'')+'"></div><div class="field"><label>Contraseña</label><input id="deliveryPass" value="'+(s.deliveryPass||'')+'"></div></div>':'';const action=s.status==='Pendiente'?'<button class="primary" data-id="'+s.id+'" onclick="approvePayment(this.dataset.id)">✓ Confirmar transferencia</button>':s.status==='Transferencia verificada'?'<button class="primary" data-id="'+s.id+'" onclick="deliverOrder(this.dataset.id)">✓ Marcar entrega realizada</button>':'<span class="status ok">✓ Pedido finalizado</span>';openModal('Pedido '+s.id,'<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+(s.customer||'Cliente')+'</div><div class="orderMeta">'+(s.email||'')+' · @'+(s.username||'cliente')+' · ID Free Fire: '+(s.player||'—')+'</div></div><span class="status '+(s.status==='Entrega realizada'?'ok':'pending')+'">'+s.status+'</span></div><div class="payBox" style="margin-top:12px"><div class="payRow"><span>Producto</span><b>'+s.product+'</b></div><div class="payRow"><span>Total</span><b>'+money(s.amount)+'</b></div><div class="payRow"><span>Estado</span><b>'+s.status+'</b></div></div><div style="margin-top:14px;font-size:12px;color:#aeb7d0;font-weight:800">Comprobante</div>'+receipt+fields+'<div class="field" style="margin-top:12px"><label>Mensaje de entrega</label><textarea id="deliveryNote" rows="3">'+(s.deliveryNote||'')+'</textarea></div><div class="adminOrderActions">'+action+'<button class="secondary" onclick="closeModal()">Cerrar</button></div></div>')}
-async function loginUser(){const identity=document.getElementById('loginIdentity').value.trim().toLowerCase(),pass=document.getElementById('loginPass').value;try{await loginSupabase(identity,pass);const profile=await loadProfile();window.__dhProfile=profile||{id:sbSession.user?.id,name:localStorage.getItem('dh_logged_name')||identity.split('@')[0],username:identity.split('@')[0],email:identity.includes('@')?identity:'',role:localStorage.getItem('dh_role')||'customer'};localStorage.setItem('dh_logged_name',window.__dhProfile.name||'');localStorage.setItem('dh_logged_email',window.__dhProfile.email||'');localStorage.setItem('dh_role',window.__dhProfile.role||'customer');registerActivity();closeModal();refreshAccount();if(window.__dhProfile.role==='admin')showAdmin();else showToast('Bienvenido, '+(window.__dhProfile.name||identity).split(' ')[0]+'.')}catch(e){showToast(e.message||'Usuario o contraseña incorrectos.')}}
+async function loginUser(){const identity=document.getElementById('loginIdentity').value.trim().toLowerCase(),pass=document.getElementById('loginPass').value;try{await loginSupabase(identity,pass);const profile=await loadProfile();window.__dhProfile=profile||{id:sbSession.user?.id,name:localStorage.getItem('dh_logged_name')||identity.split('@')[0],username:identity.split('@')[0],email:identity.includes('@')?identity:'',role:localStorage.getItem('dh_role')||'customer'};localStorage.setItem('dh_logged_name',window.__dhProfile.name||'');localStorage.setItem('dh_logged_email',window.__dhProfile.email||'');localStorage.setItem('dh_role',window.__dhProfile.role||'customer');registerActivity();await initRealtime();closeModal();refreshAccount();if(window.__dhProfile.role==='admin')showAdmin();else showToast('Bienvenido, '+(window.__dhProfile.name||identity).split(' ')[0]+'.')}catch(e){showToast(e.message||'Usuario o contraseña incorrectos.')}}
 async function bootDiamondHub(){try{const hash=new URLSearchParams(window.location.hash.replace(/^#/,'').replace(/^\?/,'').replace(/&/g,'&'));const access=hash.get('access_token'),refresh=hash.get('refresh_token');if(access){sbSession={access_token:access,refresh_token:refresh||''};localStorage.setItem('dh_access_token',access);if(refresh)localStorage.setItem('dh_refresh_token',refresh);localStorage.setItem('dh_last_activity',String(Date.now()));history.replaceState({},document.title,window.location.pathname+window.location.search)}const user=await loadSession();if(user){sbSession.user=user;try{const profile=await loadProfile();window.__dhProfile=profile||{id:user.id,name:localStorage.getItem('dh_logged_name')||'',username:(localStorage.getItem('dh_logged_email')||'').split('@')[0],email:localStorage.getItem('dh_logged_email')||'',role:localStorage.getItem('dh_role')||'customer'};localStorage.setItem('dh_role',window.__dhProfile.role||'customer');registerActivity()}catch(_){}}}catch(_){}startActivityTracking();await renderRemoteStore();if(window.__dhProfile?.role==='admin'&&localStorage.getItem('dh_last_view')==='admin')showAdmin();else showStore()}
 let dhAdminPoll=null;const DH_OLD_SHOW_ADMIN=showAdmin;showAdmin=function(){DH_OLD_SHOW_ADMIN();clearInterval(dhAdminPoll);if(currentRemoteProfile()?.role==='admin')dhAdminPoll=setInterval(function(){if(state.adminTab==='dashboard'||state.adminTab==='sales')refreshAdminOrders()},15000)};const DH_OLD_SHOW_STORE=showStore;showStore=function(){DH_OLD_SHOW_STORE();clearInterval(dhAdminPoll);dhAdminPoll=null}
+async function dhUploadPublicMedia(file,folder){
+  const path='public/'+folder+'-'+Date.now()+'-'+dhSafeFileName(file.name);
+  const response=await fetch(SB_URL+'/storage/v1/object/store-media/'+dhEncodedStoragePath(path),{method:'POST',headers:{apikey:SB_KEY,Authorization:'Bearer '+(sbSession?.access_token||''),'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
+  const data=await response.json().catch(function(){return {}});
+  if(!response.ok)throw new Error(data.message||data.error||'No se pudo subir la imagen.');
+  return SB_URL+'/storage/v1/object/public/store-media/'+dhEncodedStoragePath(path);
+}
+
+async function loadProductsRemote(){
+  const rows=await sbFetch('/rest/v1/products?select=id,name,category,kind,diamonds,price,tag,active,color,image_url&active=eq.true&order=id.asc');
+  if(rows&&rows.length){
+    state.products=rows.map(function(p){return {id:p.id,name:p.name,category:p.category,kind:p.kind,diamonds:p.diamonds,price:Number(p.price),tag:p.tag,color:p.color||'',image_url:p.image_url||''}});
+    localStorage.setItem('dh_products',JSON.stringify(state.products));
+  }
+}
+
+async function loadAdminOrders(){
+  if(currentRemoteProfile()?.role!=='admin')return [];
+  const rows=await sbFetch('/rest/v1/orders?select=id,user_id,product_id,product_name,amount,player_id,status,created_at,delivery_note,receipt_name&order=created_at.desc');
+  let receipts=[];
+  try{receipts=await sbFetch('/rest/v1/receipts?select=order_id,file_name,storage_path&order=created_at.desc')}catch(_){}
+  const remote=rows.map(function(o){
+    const p=state.products.find(function(x){return String(x.id)===String(o.product_id)});
+    const rec=receipts.find(function(x){return String(x.order_id)===String(o.id)});
+    return {dbId:o.id,id:o.id.slice(0,8).toUpperCase(),date:new Date(o.created_at).toLocaleString('es-MX'),customer:'Cliente',email:'',username:'',product:o.product_name,amount:Number(o.amount),status:o.status,player:o.player_id,receiptName:rec?.file_name||o.receipt_name||'',storagePath:rec?.storage_path||'',receiptDataUrl:'',userId:o.user_id,deliveryType:p?.kind==='account'?'account':'diamonds',deliveryNote:o.delivery_note||''};
+  });
+  try{
+    const ids=Array.from(new Set(remote.map(function(x){return x.userId}).filter(Boolean)));
+    if(ids.length){
+      const profiles=await sbFetch('/rest/v1/profiles?select=id,name,username,email&id=in.('+ids.join(',')+')');
+      remote.forEach(function(s){const p=profiles.find(function(x){return x.id===s.userId});if(p){s.customer=p.name||p.username||'Cliente';s.username=p.username||'';s.email=p.email||''}});
+    }
+  }catch(_){}
+  state.sales=remote;
+  localStorage.setItem('dh_sales',JSON.stringify(remote));
+  try{
+    const notes=await sbFetch('/rest/v1/notifications?select=id,order_id,type,message,read,created_at&order=created_at.desc&limit=50');
+    state.notifications=notes.map(function(n){return {id:n.id,orderId:n.order_id,type:n.type,message:n.message,read:!!n.read,date:new Date(n.created_at).toLocaleString('es-MX')}});
+    localStorage.setItem('dh_notifications',JSON.stringify(state.notifications));
+  }catch(_){}
+  return remote;
+}
+
+async function dhReceiptUrl(s){
+  let path=s.storagePath;
+  if(!path&&s.userId&&s.dbId&&s.receiptName)path=dhStoragePath(s.userId,s.dbId,s.receiptName);
+  if(!path)throw new Error('Este pedido no tiene un comprobante registrado.');
+  return await dhSignedStorageUrl('receipts',path);
+}
+
+function filteredSales(){
+  const q=String(state.saleSearch||'').trim().toLowerCase();
+  if(!q)return state.sales;
+  return state.sales.filter(function(s){return String(s.id||'').toLowerCase().includes(q)||String(s.dbId||'').toLowerCase().includes(q)});
+}
+
+function renderAdminSalesOnly(){document.getElementById('adminContent').innerHTML=salesHTML()}
+function clearSaleSearch(){state.saleSearch='';renderAdminSalesOnly()}
+
+function salesHTML(){
+  const rows=filteredSales(),total=rows.reduce(function(sum,x){return sum+Number(x.amount)},0);
+  return '<div class="adminTop"><div><h1>Ventas</h1><p>Busca por número de pedido y revisa cada comprobante.</p></div><div class="adminActions"><button class="secondary" onclick="refreshAdminOrders()">↻ Actualizar</button><button class="secondary" onclick="exportCSV()">↓ Exportar</button></div></div>'+
+  '<div class="adminSearch"><input id="saleSearch" placeholder="Buscar por número de pedido..." value="'+(state.saleSearch||'')+'" oninput="state.saleSearch=this.value;renderAdminSalesOnly()"><button class="secondary" onclick="clearSaleSearch()">Limpiar</button></div>'+
+  '<div class="metricGrid"><div class="metric"><span>Resultados</span><strong>'+rows.length+'</strong></div><div class="metric"><span>Ingresos encontrados</span><strong>'+money(total)+'</strong></div><div class="metric"><span>Pendientes</span><strong>'+rows.filter(function(s){return s.status==='Pendiente'}).length+'</strong></div><div class="metric"><span>Entregados</span><strong>'+rows.filter(function(s){return s.status==='Entrega realizada'}).length+'</strong></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Pedidos</h3><p>Usa "Abrir" para ver el comprobante y cambiar el estado.</p></div></div><div class="panelBody tableWrap">'+(rows.length?salesTable(rows):'<div class="empty">No hay pedidos que coincidan con la búsqueda.</div>')+'</div></div>';
+}
+
+function appearanceHTML(){
+  const t=dhTheme();
+  const font=localStorage.getItem('dh_font')||'Inter';
+  return '<div class="panel"><div class="panelHead"><div><h3>Apariencia general</h3><p>Controla colores, tipografía y fondo.</p></div></div><div class="panelBody"><div class="appearanceGrid">'+
+  '<div class="field"><label>Color principal</label><input id="themePrimary" type="color" value="'+t.primary+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color secundario</label><input id="themePrimary2" type="color" value="'+t.primary2+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color de acento</label><input id="themeCyan" type="color" value="'+t.cyan+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color de letras</label><input id="themeText" type="color" value="'+(t.text||'#f4f6ff')+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color de letras secundarias</label><input id="themeMuted" type="color" value="'+(t.muted||'#98a0bd')+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color de fondo</label><input id="themeBg" type="color" value="'+t.bg+'" style="height:42px"></div>'+
+  '<div class="field"><label>Color de tarjetas</label><input id="themeSurface" type="color" value="'+t.surface+'" style="height:42px"></div>'+
+  '<div class="field"><label>Tipografía</label><select id="themeFont"><option '+(font==='Inter'?'selected':'')+'>Inter</option><option '+(font==='Arial'?'selected':'')+'>Arial</option><option '+(font==='Georgia'?'selected':'')+'>Georgia</option><option '+(font==='Trebuchet MS'?'selected':'')+'>Trebuchet MS</option><option '+(font==='Verdana'?'selected':'')+'>Verdana</option></select></div>'+
+  '<div class="field"><label>Fondo con imagen</label><input id="backgroundFile" type="file" accept="image/*"></div>'+
+  '</div><div class="formActions"><button class="secondary" onclick="resetTheme()">Restablecer</button><button class="primary" onclick="saveFullAppearance()">Guardar apariencia</button></div></div></div>';
+}
+
+async function saveFullAppearance(){
+  const theme=Object.assign(dhTheme(),{
+    primary:document.getElementById('themePrimary').value,
+    primary2:document.getElementById('themePrimary2').value,
+    cyan:document.getElementById('themeCyan').value,
+    text:document.getElementById('themeText').value,
+    muted:document.getElementById('themeMuted').value,
+    bg:document.getElementById('themeBg').value,
+    surface:document.getElementById('themeSurface').value
+  });
+  state.settings.theme=theme;
+  localStorage.setItem('dh_theme',JSON.stringify(theme));
+  localStorage.setItem('dh_font',document.getElementById('themeFont').value);
+  try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(theme)})})}catch(_){}
+  const bg=document.getElementById('backgroundFile').files?.[0];
+  if(bg){
+    try{
+      const url=await dhUploadPublicMedia(bg,'background');
+      state.settings.backgroundUrl=url;
+      localStorage.setItem('dh_background_url',url);
+      try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({background_url:url})})}catch(_){}
+    }catch(e){showToast(e.message||'No se pudo subir el fondo.')}
+  }
+  applyTheme();applyStoreBackground();renderStore();showToast('Apariencia guardada.');
+}
+
+function applyStoreBackground(){
+  const url=state.settings?.backgroundUrl||localStorage.getItem('dh_background_url');
+  document.documentElement.style.setProperty('--dh-page-bg',url?'linear-gradient(rgba(7,9,18,.68),rgba(7,9,18,.68)),url("'+url+'")':'radial-gradient(circle at 12% 0%,rgba(139,92,246,.2),transparent 30%),radial-gradient(circle at 88% 4%,rgba(34,211,238,.12),transparent 24%),#070912');
+  document.documentElement.style.setProperty('--dh-font',(localStorage.getItem('dh_font')||'Inter')+',ui-sans-serif,system-ui,sans-serif');
+  const t=dhTheme();
+  document.documentElement.style.setProperty('--text',t.text||'#f4f6ff');
+  document.documentElement.style.setProperty('--muted',t.muted||'#98a0bd');
+  document.documentElement.style.setProperty('--surface',t.surface||'#111526');
+}
+
+function productForm(p){
+  p=p||{};
+  return '<div class="formGrid"><div class="field"><label>Nombre del producto</label><input id="pf_name" value="'+(p.name||'')+'"></div><div class="field"><label>Categoría</label><input id="pf_cat" value="'+(p.category||'Diamantes')+'"></div><div class="field"><label>Tipo de entrega</label><select id="pf_kind"><option value="diamonds" '+((p.kind||'diamonds')==='diamonds'?'selected':'')+'>Diamantes / recarga</option><option value="account" '+((p.kind||'')==='account'?'selected':'')+'>Cuenta / credenciales</option><option value="other" '+((p.kind||'')==='other'?'selected':'')+'>Otro producto</option></select></div><div class="field"><label>Cantidad de diamantes</label><input id="pf_diamonds" type="number" value="'+(p.diamonds||'')+'"></div><div class="field"><label>Precio (MXN)</label><input id="pf_price" type="number" value="'+(p.price||'')+'"></div><div class="field"><label>Etiqueta</label><input id="pf_tag" value="'+(p.tag||'Oferta')+'"></div><div class="field"><label>Color del producto</label><input id="pf_color" type="color" value="'+(p.color||dhTheme().primary)+'" style="height:42px"></div><div class="field"><label>Imagen del producto</label><input id="pf_image" type="file" accept="image/*" onchange="previewProductImage(event)"><img id="pf_imagePreview" class="mediaThumb" style="display:'+(p.image_url?'block':'none')+';width:110px;height:80px" src="'+(p.image_url||'')+'"></div></div><div class="notice">Puedes reemplazar el rombo por una imagen propia para cada paquete.</div><div class="formActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveProduct('+((p.id)||0)+')">Guardar</button></div>';
+}
+
+function previewProductImage(e){
+  const f=e.target.files?.[0],img=document.getElementById('pf_imagePreview');
+  if(!f||!img)return;
+  const r=new FileReader();r.onload=function(ev){img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f);
+}
+
+async function saveProduct(id){
+  const obj={name:document.getElementById('pf_name').value.trim(),category:document.getElementById('pf_cat').value.trim()||'General',kind:document.getElementById('pf_kind').value,diamonds:Number(document.getElementById('pf_diamonds').value)||0,price:Number(document.getElementById('pf_price').value)||0,tag:document.getElementById('pf_tag').value.trim()||'Oferta',color:document.getElementById('pf_color').value,active:true};
+  const file=document.getElementById('pf_image')?.files?.[0];
+  if(!obj.name||!obj.price){showToast('Agrega nombre y precio.');return}
+  try{
+    let row;
+    if(id){await sbFetch('/rest/v1/products?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(obj)});row=Object.assign({id:id},obj)}
+    else{const created=await sbFetch('/rest/v1/products',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(obj)});row=Object.assign({},obj,created?.[0]||{id:Date.now()})}
+    if(file){const imageUrl=await dhUploadPublicMedia(file,'product-'+row.id);await sbFetch('/rest/v1/products?id=eq.'+encodeURIComponent(row.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({image_url:imageUrl})});row.image_url=imageUrl}
+    const ix=state.products.findIndex(function(x){return String(x.id)===String(row.id)});
+    if(ix>=0)state.products[ix]=Object.assign({},state.products[ix],row);else state.products.push(row);
+    localStorage.setItem('dh_products',JSON.stringify(state.products));closeModal();renderAdmin();renderStore();showToast(id?'Producto actualizado.':'Producto creado.');
+  }catch(e){
+    showToast(e.message||'No se pudo guardar el producto. Revisa products y Storage.');
+  }
+}
+
+function productCardHTML(p){
+  const color=p.color||dhTheme().primary,secondary=dhTheme().cyan;
+  const visual=p.image_url?'<img src="'+p.image_url+'" alt="'+p.name+'" style="max-width:100%;max-height:100%;width:100%;height:100%;object-fit:cover">':'<div class="miniDiamond" style="background:linear-gradient(135deg,#eafcff,'+secondary+' 40%,'+color+' 88%)"></div>';
+  return '<article class="product"><div class="productVisual">'+visual+'</div><div class="productBody"><div class="productTop"><div><div class="productName">'+p.name+'</div><div class="productMeta">'+((p.kind||'diamonds')==='account'?'Entrega de datos de acceso':'Entrega a ID de jugador')+'</div></div><span class="badge" style="color:'+color+';border-color:'+color+'55;background:'+color+'18">'+(p.tag||'Oferta')+'</span></div><div class="productBottom"><div class="price">'+money(p.price)+'</div><button class="buy" style="background:linear-gradient(135deg,'+color+','+secondary+')" onclick="startPurchase('+p.id+')">Comprar</button></div></div></article>';
+}
+
+function contentHTML(){
+  return '<div class="adminTop"><div><h1>Contenido</h1><p>Gestiona logo, banner, promoción e imagen de fondo.</p></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Logo</h3><p>Imagen de identidad de DiamondHub.</p></div></div><div class="panelBody"><div class="filebox"><input id="logoFile" type="file" accept="image/*" onchange="contentUpload(event,\'logo\')"><img id="logoPreview" class="uploadPreview"></div><div class="formActions"><button class="primary" onclick="saveContentMedia(\'logo\')">Guardar logo</button></div></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Banner principal</h3><p>Imagen grande de la portada.</p></div></div><div class="panelBody"><div class="filebox"><input id="bannerFile" type="file" accept="image/*" onchange="contentUpload(event,\'banner\')"><img id="bannerPreview" class="uploadPreview"></div><div class="formActions"><button class="primary" onclick="saveContentMedia(\'banner\')">Guardar banner</button></div></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Promoción destacada</h3><p>Imagen del bloque de promociones.</p></div></div><div class="panelBody"><div class="filebox"><input id="promoFile" type="file" accept="image/*" onchange="contentUpload(event,\'promo\')"><img id="promoPreview" class="uploadPreview"></div><div class="formActions"><button class="primary" onclick="saveContentMedia(\'promo\')">Guardar promoción</button></div></div></div>'+
+  '<div class="notice">Las imágenes públicas usan <b>store-media</b>. Los comprobantes siguen separados en <b>receipts</b>.</div>';
+}
+
+function contentUpload(e,type){
+  const f=e.target.files?.[0];if(!f)return;
+  const id=type==='logo'?'logoPreview':type==='banner'?'bannerPreview':'promoPreview',img=document.getElementById(id);if(!img)return;
+  const r=new FileReader();r.onload=function(ev){img.src=ev.target.result;img.style.display='block'};r.readAsDataURL(f);
+}
+
+async function saveContentMedia(type){
+  const id=type==='logo'?'logoFile':type==='banner'?'bannerFile':'promoFile',file=document.getElementById(id)?.files?.[0];
+  if(!file){showToast('Selecciona una imagen primero.');return}
+  try{
+    const publicUrl=await dhUploadPublicMedia(file,type),column=type==='logo'?'logo_url':type==='banner'?'banner_url':'promo_url',key=type==='logo'?'logoUrl':type==='banner'?'bannerUrl':'promoUrl';
+    state.settings[key]=publicUrl;localStorage.setItem('dh_store_'+type+'_url',publicUrl);
+    await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({[column]:publicUrl})}).catch(function(){});
+    applyStoreMedia();renderStore();showToast(type==='logo'?'Logo guardado.':type==='banner'?'Banner guardado.':'Promoción guardada.');
+  }catch(e){showToast(e.message||'No se pudo subir la imagen.')}
+}
+
+async function editSaleById(id){
+  const s=state.sales.find(function(x){return x.id===id});if(!s)return;
+  let receipt='<div class="notice">No se encontró el comprobante.</div>';
+  if(s.dbId){
+    try{
+      const url=await dhReceiptUrl(s),ext=String(s.receiptName||'').toLowerCase();
+      if(/\.(png|jpe?g|webp|gif|bmp|heic)$/i.test(ext)){
+        receipt='<div style="padding:10px;border:1px solid var(--border);border-radius:14px;background:#080b14"><img class="receiptThumb" style="width:100%;height:auto;max-height:520px;object-fit:contain" src="'+url+'" alt="Comprobante '+s.id+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><div class="notice" style="display:none">No se pudo renderizar la imagen en el navegador.</div><div style="display:flex;gap:8px;margin-top:10px"><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir original</a><a class="socialLink" download="'+(s.receiptName||'comprobante')+'" href="'+url+'">Descargar</a></div></div>';
+      }else{
+        receipt='<div class="notice"><b>'+String(s.receiptName||'comprobante')+'</b><br><a class="socialLink" target="_blank" rel="noreferrer" href="'+url+'">Abrir comprobante</a></div>';
+      }
+    }catch(e){receipt='<div class="notice">No se pudo abrir el comprobante: '+e.message+'</div>'}
+  }
+  const fields=s.deliveryType==='account'?'<div class="formGrid"><div class="field"><label>Correo / usuario</label><input id="deliveryUser" value="'+(s.deliveryUser||'')+'"></div><div class="field"><label>Contraseña</label><input id="deliveryPass" value="'+(s.deliveryPass||'')+'"></div></div>':'';
+  const action=s.status==='Pendiente'?'<button class="primary" data-id="'+s.id+'" onclick="approvePayment(this.dataset.id)">✓ Confirmar transferencia</button>':s.status==='Transferencia verificada'?'<button class="primary" data-id="'+s.id+'" onclick="deliverOrder(this.dataset.id)">✓ Marcar entrega realizada</button>':'<span class="status ok">✓ Pedido finalizado</span>';
+  openModal('Pedido '+s.id,'<div class="orderCard"><div class="orderTop"><div><div class="orderTitle">'+(s.customer||'Cliente')+'</div><div class="orderMeta">'+(s.email||'')+' · @'+(s.username||'cliente')+' · ID Free Fire: '+(s.player||'—')+'</div></div><span class="status '+(s.status==='Entrega realizada'?'ok':'pending')+'">'+s.status+'</span></div><div class="payBox" style="margin-top:12px"><div class="payRow"><span>Producto</span><b>'+s.product+'</b></div><div class="payRow"><span>Total</span><b>'+money(s.amount)+'</b></div><div class="payRow"><span>Pedido</span><b>'+s.id+'</b></div></div><div style="margin-top:14px;font-size:12px;color:#aeb7d0;font-weight:800">Comprobante</div>'+receipt+fields+'<div class="field" style="margin-top:12px"><label>Mensaje de entrega</label><textarea id="deliveryNote" rows="3">'+(s.deliveryNote||'')+'</textarea></div><div class="adminOrderActions">'+action+'<button class="secondary" onclick="closeModal()">Cerrar</button></div></div>');
+}
+
+async function saveSocialSettingsRemote(){
+  state.settings.socials={instagram:document.getElementById('socialInstagram').value.trim()||'#',facebook:document.getElementById('socialFacebook').value.trim()||'#',telegram:document.getElementById('socialTelegram').value.trim()||'#',whatsapp:document.getElementById('socialWhatsapp').value.trim()||'#'};
+  state.settings.socialLabel=document.getElementById('socialLabel').value.trim()||'Soporte y novedades';
+  state.settings.socialText=document.getElementById('socialText').value.trim()||'Contáctanos por cualquiera de nuestras redes.';
+  await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({instagram:state.settings.socials.instagram,facebook:state.settings.socials.facebook,telegram:state.settings.socials.telegram,whatsapp:state.settings.socials.whatsapp,social_label:state.settings.socialLabel,social_text:state.settings.socialText})}).catch(function(){});
+  save();const old=document.getElementById('socialBanner');if(old)old.remove();installSocialBanner();showToast('Redes sociales actualizadas.');
+}
+
+async function savePaymentSettings(){
+  state.settings.payment={bank:document.getElementById('payBank').value.trim()||'Banco Demo',beneficiary:document.getElementById('payBeneficiary').value.trim()||'TIENDA DIAMONDHUB',account:document.getElementById('payAccount').value.trim()||'0000 0000 0000 0000',instruction:document.getElementById('payInstruction').value.trim()||'Realiza la transferencia y guarda el comprobante.'};
+  await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({bank:state.settings.payment.bank,beneficiary:state.settings.payment.beneficiary,account:state.settings.payment.account,payment_instruction:state.settings.payment.instruction})}).catch(function(){});
+  save();showToast('Datos de pago actualizados.');
+}
+
+function settingsHTML(){
+  const pay=state.settings.payment||{bank:'Banco Demo',beneficiary:'TIENDA DIAMONDHUB',account:'0000 0000 0000 0000',instruction:'Realiza la transferencia y guarda el comprobante.'},social=state.settings.socials||{instagram:'#',facebook:'#',telegram:'#',whatsapp:'#'};
+  return '<div class="adminTop"><div><h1>Configuración</h1><p>Controla apariencia, redes, pagos y Telegram.</p></div></div>'+appearanceHTML()+
+  '<div class="panel"><div class="panelHead"><div><h3>Redes sociales</h3><p>Configura los enlaces que verá el cliente.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Instagram</label><input id="socialInstagram" value="'+social.instagram+'"></div><div class="field"><label>Facebook</label><input id="socialFacebook" value="'+social.facebook+'"></div><div class="field"><label>Telegram público</label><input id="socialTelegram" value="'+social.telegram+'"></div><div class="field"><label>WhatsApp</label><input id="socialWhatsapp" value="'+social.whatsapp+'"></div><div class="field"><label>Título</label><input id="socialLabel" value="'+(state.settings.socialLabel||'Soporte y novedades')+'"></div><div class="field"><label>Texto</label><input id="socialText" value="'+(state.settings.socialText||'Contáctanos por cualquiera de nuestras redes.')+'"></div></div><div class="formActions"><button class="primary" onclick="saveSocialSettingsRemote()">Guardar redes</button></div></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Telegram de ventas</h3><p>Tu bot sigue conectado mediante la Edge Function.</p></div><span class="status ok">CONECTADO</span></div><div class="panelBody"><div class="payBox"><div class="payRow"><span>Función</span><b>notify-telegram</b></div><div class="payRow"><span>Estado</span><b>Listo para nuevas compras</b></div></div><div class="formActions"><button class="primary" onclick="testTelegramConnection()">Enviar prueba</button></div></div></div>'+
+  '<div class="panel"><div class="panelHead"><div><h3>Datos de pago</h3><p>Información mostrada al comprador.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Banco</label><input id="payBank" value="'+pay.bank+'"></div><div class="field"><label>Beneficiario</label><input id="payBeneficiary" value="'+pay.beneficiary+'"></div><div class="field"><label>Cuenta / CLABE</label><input id="payAccount" value="'+pay.account+'"></div><div class="field"><label>Instrucción</label><input id="payInstruction" value="'+pay.instruction+'"></div></div><div class="formActions"><button class="primary" onclick="savePaymentSettings()">Guardar pagos</button></div></div></div>';
+}
+
+async function loadPaymentSettings(){
+  try{
+    const rows=await sbFetch('/rest/v1/store_settings?select=bank,beneficiary,account,payment_instruction,instagram,facebook,telegram,whatsapp,social_label,social_text,logo_url,banner_url,promo_url,background_url,theme_json&id=eq.1&limit=1');
+    if(rows[0]){
+      const r=rows[0];
+      state.settings={payment:{bank:r.bank||'Banco Demo',beneficiary:r.beneficiary||'TIENDA DIAMONDHUB',account:r.account||'0000 0000 0000 0000',instruction:r.payment_instruction||'Realiza la transferencia y guarda el comprobante.'},socials:{instagram:r.instagram||'#',facebook:r.facebook||'#',telegram:r.telegram||'#',whatsapp:r.whatsapp||'#'},socialLabel:r.social_label||'Soporte y novedades',socialText:r.social_text||'Contáctanos por cualquiera de nuestras redes.',logoUrl:r.logo_url||'',bannerUrl:r.banner_url||'',promoUrl:r.promo_url||'',backgroundUrl:r.background_url||''};
+      if(r.theme_json)try{state.settings.theme=typeof r.theme_json==='string'?JSON.parse(r.theme_json):r.theme_json}catch(_){}
+    }
+  }catch(_){}
+  applyTheme();applyStoreBackground();
+}
+
+applyStoreBackground();
 applyTheme();
 bootDiamondHub();
+setTimeout(function(){initRealtime()},600);
 </script>
  </body>
  </html>
