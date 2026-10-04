@@ -1480,6 +1480,7 @@ setTimeout(function(){initRealtime()},600);
   window.dhRenderPage=dhRenderPage;
   window.dhAdminEditorVisibility=dhAdminEditorVisibility;
   setTimeout(function(){dhRenderPage();refreshAccount();dhAdminEditorVisibility()},300);
+  window.dhEscape=dhEscape;
 })();
 
 (function(){
@@ -1753,6 +1754,7 @@ setTimeout(function(){initRealtime()},600);
   const OLD_REFRESH_ACCOUNT=window.refreshAccount;
   if(typeof OLD_REFRESH_ACCOUNT==='function')window.refreshAccount=function(){OLD_REFRESH_ACCOUNT();setTimeout(easySyncPanel,20)};
   setTimeout(function(){easyRefresh();easySyncPanel()},350);
+  window.easyLayout=easyLayout;window.easySaveLayout=easySaveLayout;window.easySaveTheme=easySaveTheme;window.easyApplyGeometry=easyApplyGeometry;window.easyDecorate=easyDecorate;window.easyRefresh=easyRefresh;window.easySyncPanel=easySyncPanel;window.easyRefreshCategoryGrids=easyRefreshCategoryGrids;
 })();
 
 (function(){
@@ -1922,6 +1924,7 @@ setTimeout(function(){initRealtime()},600);
   function currentLayout(){
     state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};
     const saved=state.settings.theme.dhLayout;
+    if(typeof easyLayout==='function'){const base=easyLayout();return {blocks:base.blocks.slice()}}
     return saved&&Array.isArray(saved.blocks)?{blocks:saved.blocks.slice()}: {blocks:[]};
   }
   async function addCategorySection(name){
@@ -2055,6 +2058,7 @@ setTimeout(function(){initRealtime()},600);
 
 (function(){
   function norm(v){return String(v||'').trim().toLowerCase()}
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
   function categoryNames(){
     const out=[],add=function(v){v=String(v||'').trim();if(!v||norm(v)==='todos')return;if(!out.some(function(x){return norm(x)===norm(v)}))out.push(v)};
     try{const a=JSON.parse(localStorage.getItem('dh_categories')||'[]');if(Array.isArray(a))a.forEach(add)}catch(_){ }
