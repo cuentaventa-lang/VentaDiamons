@@ -197,7 +197,7 @@ const state={
  products:JSON.parse(localStorage.getItem('dh_products')||'null')||defaultProducts,
  sales:JSON.parse(localStorage.getItem('dh_sales')||'null')||defaultSales,
  users:JSON.parse(localStorage.getItem('dh_users')||'null')||[],
- category:'Todos', currentProduct:null, purchaseStep:1, selectedReceipt:null, adminTab:'dashboard'
+ category:'', currentProduct:null, purchaseStep:1, selectedReceipt:null, adminTab:'dashboard'
 };
 function save(){localStorage.setItem('dh_products',JSON.stringify(state.products));localStorage.setItem('dh_sales',JSON.stringify(state.sales));localStorage.setItem('dh_users',JSON.stringify(state.users))}
 function money(v){return '$'+Number(v).toLocaleString('es-MX')}
@@ -1279,10 +1279,11 @@ setTimeout(function(){initRealtime()},600);
     }).join('');
     const filters=document.getElementById('categoryFilters'),grid=document.getElementById('productGrid');
     if(filters&&grid){
-      const cats=['Todos'].concat(Array.from(new Set(state.products.map(function(p){return p.category||'General'}))));
+      const cats=Array.from(new Set(state.products.map(function(p){return String(p.category||'General').trim()}).filter(Boolean)));
+      if(state.category&&!cats.some(function(c){return c===state.category}))state.category='';
       filters.innerHTML=cats.map(function(c){return '<button class="chip '+(state.category===c?'active':'')+'" data-category="'+dhEscape(c)+'" onclick="setCategory(this.dataset.category)">'+dhEscape(c)+'</button>'}).join('');
-      const filtered=state.category==='Todos'?state.products:state.products.filter(function(p){return (p.category||'General')===state.category});
-      grid.innerHTML=filtered.map(productCardHTML).join('');
+      const filtered=state.category?state.products.filter(function(p){return (p.category||'General')===state.category}):[];
+      grid.innerHTML=filtered.length?filtered.map(productCardHTML).join(''):'<div class="empty" style="grid-column:1/-1">Selecciona una categoría para mostrar los productos.</div>';
     }
     installSocialBanner();
     applyStoreMedia();
@@ -1939,6 +1940,103 @@ setTimeout(function(){initRealtime()},600);
   const oldDecorate=dhDecorateEditor;
   dhDecorateEditor=function(){oldDecorate();document.querySelectorAll('.dh-layout-block').forEach(function(block){if(document.body.classList.contains('dh-edit-mode')){block.ondragstart=function(e){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',block.getAttribute('data-dh-block'))};block.ondragover=function(e){e.preventDefault()};block.ondrop=function(e){e.preventDefault();const from=e.dataTransfer.getData('text/plain'),to=block.getAttribute('data-dh-block');if(from&&to&&from!==to)dhReorderBlocks(from,to)}}})};
   setTimeout(function(){dhRenderPage();dhAdminEditorVisibility()},350);
+})();
+</script>
+<script>
+(function(){
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+  function categories(){
+    const out=[],add=function(v){v=String(v||'').trim();if(v&&v.toLowerCase()!=='todos'&&!out.some(function(x){return x.toLowerCase()===v.toLowerCase()}))out.push(v)};
+    try{const a=JSON.parse(localStorage.getItem('dh_categories')||'[]');if(Array.isArray(a))a.forEach(add)}catch(_){}
+    const saved=state.settings?.theme?.dhCategories;if(Array.isArray(saved))saved.forEach(add);
+    state.products.forEach(function(p){add(p.category)});
+    return out;
+  }
+  async function saveCategories(list){
+    state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};
+    state.settings.theme.dhCategories=list.slice();
+    localStorage.setItem('dh_categories',JSON.stringify(list));
+    localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+    try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme)})})}catch(e){console.warn('Categorías:',e)}
+  }
+  function currentLayout(){
+    state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};
+    const saved=state.settings.theme.dhLayout;
+    return saved&&Array.isArray(saved.blocks)?{blocks:saved.blocks.slice()}: {blocks:[]};
+  }
+  async function addCategorySection(name){
+    const layout=currentLayout();
+    if(!layout.blocks.some(function(b){return b.type==='products'&&String(b.categoryFilter||'').trim().toLowerCase()===name.toLowerCase()})){
+      layout.blocks.push({id:'category-'+Date.now(),type:'products',visible:true,title:name,description:'Productos de '+name+'.',categoryFilter:name,styles:{},size:{width:100,height:0,imageFit:'cover',ratio:''}});
+      state.settings.theme.dhLayout=layout;
+      localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+      try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme)})})}catch(_){}
+    }
+  }
+  window.dhEasyCreateCategorySave=async function(){
+    const input=document.getElementById('easyNewCategory'),name=input?.value.trim()||'';
+    if(!name){showToast('Escribe un nombre para la categoría.');return}
+    const list=categories();
+    if(list.some(function(c){return c.toLowerCase()===name.toLowerCase()})){showToast('Esa categoría ya existe.');return}
+    list.push(name);
+    await saveCategories(list);
+    await addCategorySection(name);
+    closeModal();
+    if(typeof easyRefresh==='function')easyRefresh();
+    if(window.dhEasyOpenCategories)window.dhEasyOpenCategories();
+    showToast('Categoría '+name+' creada.');
+  };
+  window.dhEasySaveNewCategoryFromProduct=async function(draft){
+    const name=document.getElementById('easyNewCategoryFromProduct')?.value.trim()||'';
+    if(!name){showToast('Escribe un nombre para la categoría.');return}
+    const list=categories();
+    if(list.some(function(c){return c.toLowerCase()===name.toLowerCase()})){showToast('Esa categoría ya existe.');return}
+    list.push(name);
+    await saveCategories(list);
+    await addCategorySection(name);
+    draft=draft||{};draft.category=name;
+    closeModal();
+    if(window.dhEasyNewProduct)window.dhEasyNewProduct(draft);
+    showToast('Categoría '+name+' creada y seleccionada.');
+  };
+  window.dhEasyOpenCategories=function(){
+    const list=categories(),layout=currentLayout();
+    const body=(list.length?'<div style="display:grid;gap:8px">'+list.map(function(c){
+      const visible=layout.blocks.some(function(b){return b.type==='products'&&String(b.categoryFilter||'').trim().toLowerCase()===c.toLowerCase()});
+      return '<div class="orderCard" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><b>'+esc(c)+'</b><div class="orderMeta">'+(visible?'Visible en la página principal':'Sin apartado todavía')+'</div></div><button class="iconBtn" data-cat="'+esc(c)+'" onclick="dhFinalShowCategory(this.dataset.cat)">'+(visible?'Abrir':'Mostrar')+'</button></div>';
+    }).join('')+'</div>':'<div class="empty">No hay categorías creadas.</div>')+
+    '<div class="formActions"><button class="primary" onclick="dhEasyCreateCategory()">＋ Nueva categoría</button></div>';
+    openModal('Categorías',body);
+  };
+  window.dhFinalShowCategory=async function(name){
+    await addCategorySection(name);
+    closeModal();
+    if(typeof easyRefresh==='function')easyRefresh();
+    setTimeout(function(){
+      const layout=currentLayout(),b=layout.blocks.find(function(x){return x.type==='products'&&String(x.categoryFilter||'').toLowerCase()===name.toLowerCase()});
+      if(b&&window.dhEasyOpenBlock)window.dhEasyOpenBlock(b.id);
+    },80);
+  };
+  const finalAdminTab=window.adminTab;
+  window.adminTab=async function(tab){
+    state.adminTab=tab;
+    document.querySelectorAll('.sideNav button').forEach(function(b){b.classList.remove('active')});
+    document.getElementById('nav-'+tab)?.classList.add('active');
+    try{renderAdmin()}catch(e){console.error('Admin:',e)}
+    if(currentRemoteProfile()?.role==='admin'&&(tab==='dashboard'||tab==='sales'))try{await refreshAdminOrders()}catch(_){}
+  };
+  window.dhOpenAdminSettings=function(){
+    if(currentRemoteProfile()?.role!=='admin'){showToast('Inicia sesión como administrador.');return}
+    showAdmin();
+    setTimeout(function(){window.adminTab('settings')},30);
+  };
+  setTimeout(function(){
+    const nav=document.getElementById('nav-settings');
+    if(nav)nav.onclick=function(){window.adminTab('settings')};
+    const p=document.getElementById('dhEasyEditor'),ap=p&&p.querySelector('[data-easy="appearance"]');
+    if(ap)ap.onclick=function(){window.dhOpenAdminSettings()};
+    try{if(typeof window.dhRenderPage==='function')window.dhRenderPage()}catch(_){}
+  },250);
 })();
 </script>
  </body>
