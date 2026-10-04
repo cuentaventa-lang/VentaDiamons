@@ -1540,9 +1540,23 @@ setTimeout(function(){initRealtime()},600);
   }
   function easyCategories(){
     const saved=state.settings?.theme?.dhCategories;
-    const base=Array.isArray(saved)?saved.slice():[];
+    const local=easyGetLocalCategories();
+    const base=[];
+    [local,Array.isArray(saved)?saved:[]].forEach(function(list){list.forEach(function(c){c=String(c||'').trim();if(c&&!base.some(function(x){return x.toLowerCase()===c.toLowerCase()}))base.push(c)})});
     state.products.forEach(function(p){const c=String(p.category||'').trim();if(c&&!base.some(function(x){return x.toLowerCase()===c.toLowerCase()}))base.push(c)});
     return base.filter(Boolean);
+  }
+  function easyGetLocalCategories(){
+    try{
+      const raw=JSON.parse(localStorage.getItem('dh_categories')||'[]');
+      return Array.isArray(raw)?raw.map(function(c){return String(c||'').trim()}).filter(Boolean):[];
+    }catch(_){return []}
+  }
+  function easySetLocalCategories(categories){
+    const out=[];
+    (categories||[]).forEach(function(c){c=String(c||'').trim();if(c&&!out.some(function(x){return x.toLowerCase()===c.toLowerCase()}))out.push(c)});
+    localStorage.setItem('dh_categories',JSON.stringify(out));
+    return out;
   }
   function easySaveTheme(){
     state.settings=state.settings||{};
@@ -1566,12 +1580,13 @@ setTimeout(function(){initRealtime()},600);
     if(!name){showToast('Escribe un nombre para la categoría.');return false}
     const cats=easyCategories();
     if(cats.some(function(c){return c.toLowerCase()===name.toLowerCase()})){showToast('Esa categoría ya existe.');return false}
+    const next=easySetLocalCategories(cats.concat(name));
     state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};
-    state.settings.theme.dhCategories=cats.concat(name);
+    state.settings.theme.dhCategories=next.slice();
     easyAddCategorySection(name);
     easySaveTheme();
     easyRefresh();
-    showToast('Categoría '+name+' creada y añadida a la página.');
+    showToast('Categoría '+name+' creada.');
     return true;
   }
   function easyMoveBlock(id,toId){
@@ -1666,8 +1681,9 @@ setTimeout(function(){initRealtime()},600);
     let p=document.getElementById('dhEasyEditor');
     if(p)return p;
     p=document.createElement('div');p.id='dhEasyEditor';
-    p.innerHTML='<div class="dh-easy-title">Editor visual</div><div class="dh-easy-sub">La tienda conserva su tamaño real. Arrastra un bloque para cambiar su posición.</div><div class="dh-easy-grid"><button class="dh-primary" data-easy="add">＋ Agregar</button><button data-easy="categories">▦ Categorías</button><button data-easy="appearance">🎨 Apariencia</button><button class="dh-exit" data-easy="exit">✓ Terminar edición</button></div>';
+    p.innerHTML='<div class="dh-easy-title">Editor visual</div><div class="dh-easy-sub">Activa la edición para modificar bloques existentes, arrastrarlos y agregar nuevos.</div><div class="dh-easy-grid"><button class="dh-primary" data-easy="edit">✎ Editar página</button><button data-easy="add">＋ Agregar</button><button data-easy="categories">▦ Categorías</button><button data-easy="appearance">🎨 Apariencia</button><button class="dh-exit" data-easy="exit">✓ Terminar edición</button></div>';
     document.body.appendChild(p);
+    p.querySelector('[data-easy="edit"]').onclick=function(){document.body.classList.toggle('dh-edit-mode');easyDecorate();easySyncPanel();showToast(document.body.classList.contains('dh-edit-mode')?'Modo edición activado. Haz clic en un bloque para editarlo.':'Modo edición desactivado.')};
     p.querySelector('[data-easy="add"]').onclick=function(){easyOpenAddMenu()};
     p.querySelector('[data-easy="categories"]').onclick=function(){easyOpenCategories()};
     p.querySelector('[data-easy="appearance"]').onclick=function(){showAdmin();adminTab('settings')};
@@ -1776,6 +1792,119 @@ setTimeout(function(){initRealtime()},600);
   const OLD_REFRESH_ACCOUNT=window.refreshAccount;
   if(typeof OLD_REFRESH_ACCOUNT==='function')window.refreshAccount=function(){OLD_REFRESH_ACCOUNT();setTimeout(easySyncPanel,20)};
   setTimeout(function(){easyRefresh();easySyncPanel()},350);
+})();
+
+(function(){
+  function dhPayDefaults(){
+    const p=state.settings?.payment||{};
+    return [
+      {id:'transfer',name:'Transferencia bancaria',enabled:true,bank:p.bank||'Banco Demo',beneficiary:p.beneficiary||'TIENDA DIAMONDHUB',account:p.account||'0000 0000 0000 0000',instruction:'Realiza una transferencia bancaria y conserva tu comprobante.'},
+      {id:'deposit',name:'Depósito bancario',enabled:true,bank:p.bank||'Banco Demo',beneficiary:p.beneficiary||'TIENDA DIAMONDHUB',account:p.account||'0000 0000 0000 0000',instruction:'Realiza un depósito bancario y conserva tu comprobante.'}
+    ];
+  }
+  function dhPays(){
+    state.settings=state.settings||{};
+    state.settings.payment=state.settings.payment||{};
+    let m=state.settings.payment.methods||state.settings.theme?.dhPaymentMethods;
+    if(typeof m==='string')try{m=JSON.parse(m)}catch(_){m=null}
+    if(!Array.isArray(m)||!m.length)try{m=JSON.parse(localStorage.getItem('dh_payment_methods')||'null')}catch(_){m=null}
+    if(!Array.isArray(m)||!m.length)m=dhPayDefaults();
+    m=m.map(function(x,i){return Object.assign({},dhPayDefaults()[i]||dhPayDefaults()[0],x,{enabled:x.enabled!==false})});
+    state.settings.payment.methods=m;
+    return m;
+  }
+  function dhSavePays(){
+    const m=dhPays();
+    state.settings.payment.methods=m;
+    state.settings.theme=state.settings.theme||{};
+    state.settings.theme.dhPaymentMethods=m;
+    localStorage.setItem('dh_payment_methods',JSON.stringify(m));
+    localStorage.setItem('dh_theme',JSON.stringify(state.settings.theme));
+    return m;
+  }
+  async function dhPersistPays(){
+    const m=dhSavePays();
+    try{await sbFetch('/rest/v1/store_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({theme_json:JSON.stringify(state.settings.theme),bank:m[0]?.bank||'',beneficiary:m[0]?.beneficiary||'',account:m[0]?.account||'',payment_instruction:m[0]?.instruction||''})})}catch(_){}
+  }
+  function dhPayOptions(){
+    const methods=dhPays().filter(function(m){return m.enabled});
+    const selected=state.selectedPaymentMethod&&methods.some(function(m){return m.id===state.selectedPaymentMethod})?state.selectedPaymentMethod:(methods[0]?.id||'');
+    state.selectedPaymentMethod=selected;
+    const chosen=methods.find(function(m){return m.id===selected});
+    if(!chosen)return '<div class="notice">No hay métodos de pago activos.</div>';
+    return '<div style="display:grid;grid-template-columns:repeat('+Math.min(2,methods.length)+',minmax(0,1fr));gap:8px;margin-bottom:12px">'+methods.map(function(m){const on=m.id===selected;return '<button type="button" class="secondary" onclick="dhPickPay(&quot;'+m.id+'&quot;)" style="text-align:left;border-color:'+(on?'rgba(139,92,246,.7)':'var(--border)')+';background:'+(on?'rgba(139,92,246,.14)':'rgba(255,255,255,.03)')+'"><b>'+(on?'✓ ':'')+m.name+'</b><div style="font-size:10px;color:var(--muted);margin-top:3px">'+(m.id==='transfer'?'Banca móvil / transferencia':'Depósito en banco')+'</div></button>'}).join('')+'</div>'+
+      '<div class="payBox"><div style="font-size:13px;font-weight:900;margin-bottom:4px">'+chosen.name+'</div><div class="payRow"><span>Banco</span><b>'+chosen.bank+'</b></div><div class="payRow"><span>Beneficiario</span><b>'+chosen.beneficiary+'</b></div><div class="payRow"><span>Cuenta / CLABE</span><b>'+chosen.account+'</b></div></div><div class="notice">'+chosen.instruction+'</div>';
+  }
+  function dhPickPay(id){if(!dhPays().some(function(m){return m.id===id&&m.enabled}))return;state.selectedPaymentMethod=id;renderPurchase()}
+  window.dhPickPay=dhPickPay;
+
+  const DH_RENDER_PURCHASE=renderPurchase;
+  renderPurchase=function(){
+    if(state.purchaseStep!==1){DH_RENDER_PURCHASE();return}
+    const p=state.currentProduct;if(!p)return;
+    const chosen=dhPays().find(function(m){return m.id===state.selectedPaymentMethod&&m.enabled})||dhPays().find(function(m){return m.enabled});
+    if(chosen)state.selectedPaymentMethod=chosen.id;
+    openModal('Comprar · '+p.name,
+      '<div class="stepper"><span class="step active">1 · Pago</span><span class="step">2 · Datos</span><span class="step">3 · Enviado</span></div>'+
+      '<div style="font-size:13px;font-weight:900;margin-bottom:9px">1. Elige tu método de pago</div>'+
+      dhPayOptions()+
+      '<div class="payBox"><div class="payRow"><span>Producto</span><b>'+p.name+'</b></div><div class="payRow"><span>Total</span><b>'+money(p.price)+'</b></div><div class="payRow"><span>Método</span><b>'+(chosen?.name||'—')+'</b></div></div>'+
+      '<div class="modalActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="state.purchaseStep=2;renderPurchase()" '+(!chosen?'disabled':'')+'>Ya hice el pago →</button></div>'
+    );
+  };
+
+  const DH_SUBMIT_PURCHASE=submitPurchase;
+  submitPurchase=async function(){
+    const method=dhPays().find(function(m){return m.id===state.selectedPaymentMethod&&m.enabled});
+    if(!method){showToast('Selecciona un método de pago.');return}
+    const u=currentUser(),player=document.getElementById('playerId').value.trim(),file=state.selectedReceiptFile;
+    if(!u||!player||!file){showToast('Completa tu ID y adjunta el comprobante.');return}
+    const p=state.currentProduct,orderId=crypto.randomUUID(),note='Método de pago: '+method.name+'. Pendiente de validación.';
+    let storagePath='';
+    try{
+      storagePath=await dhUploadReceipt(file,u.id,orderId);
+      let created;
+      try{
+        const rows=await sbFetch('/rest/v1/orders?select=id',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:orderId,user_id:u.id,product_id:p.id,product_name:p.name,amount:p.price,player_id:player,status:'Pendiente',receipt_name:file.name,payment_method:method.id,delivery_note:note})});
+        created=rows?.[0]||{id:orderId};
+      }catch(_){
+        const rows=await sbFetch('/rest/v1/orders?select=id',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:orderId,user_id:u.id,product_id:p.id,product_name:p.name,amount:p.price,player_id:player,status:'Pendiente',receipt_name:file.name,delivery_note:note})});
+        created=rows?.[0]||{id:orderId};
+      }
+      await sbFetch('/rest/v1/receipts',{method:'POST',body:JSON.stringify({order_id:created.id,user_id:u.id,file_name:file.name,storage_path:storagePath})}).catch(function(){});
+      const shortId=String(created.id).slice(0,8).toUpperCase();
+      state.lastOrder=shortId;
+      await sbFetch('/rest/v1/notifications',{method:'POST',body:JSON.stringify({order_id:created.id,type:'telegram',message:'Nueva compra '+shortId+': '+u.name+' · '+p.name+' · '+money(p.price)+' · '+method.name,read:false})}).catch(function(){});
+      await notifyTelegram({order_id:shortId,customer:u.name,email:u.email,product:p.name,amount:p.price,player_id:player,payment_method:method.name}).catch(function(){});
+      state.purchaseStep=3;renderPurchase();showToast('Compra registrada con '+method.name+'.');
+    }catch(e){if(storagePath)await dhDeleteStorageObject('receipts',storagePath);showToast(e.message||'No se pudo registrar el pedido.')}
+  };
+
+  const DH_SETTINGS_HTML=settingsHTML;
+  settingsHTML=function(){
+    const methods=dhPays();
+    return DH_SETTINGS_HTML()+
+      '<div class="panel"><div class="panelHead"><div><h3>Métodos de pago</h3><p>El comprador podrá elegir entre transferencia o depósito.</p></div></div><div class="panelBody"><div class="formGrid">'+
+      methods.map(function(m){return '<div class="panel" style="margin:0"><div class="panelHead"><div><h3>'+m.name+'</h3><p>'+m.id+'</p></div><label style="font-size:11px"><input id="dhPayEnabled_'+m.id+'" type="checkbox" '+(m.enabled?'checked':'')+'> Activo</label></div><div class="panelBody"><div class="field"><label>Nombre</label><input id="dhPayName_'+m.id+'" value="'+dhEscape(m.name)+'"></div><div class="field"><label>Banco</label><input id="dhPayBank_'+m.id+'" value="'+dhEscape(m.bank)+'"></div><div class="field"><label>Beneficiario</label><input id="dhPayBeneficiary_'+m.id+'" value="'+dhEscape(m.beneficiary)+'"></div><div class="field"><label>Cuenta / CLABE</label><input id="dhPayAccount_'+m.id+'" value="'+dhEscape(m.account)+'"></div><div class="field"><label>Instrucciones</label><textarea id="dhPayInstruction_'+m.id+'" rows="3">'+dhEscape(m.instruction)+'</textarea></div></div></div>'}).join('')+
+      '</div><div class="formActions"><button class="primary" onclick="dhSavePaymentSettings()">Guardar métodos de pago</button></div></div></div>';
+  };
+  async function dhSavePaymentSettings(){
+    const methods=dhPays().map(function(m){return Object.assign({},m,{enabled:document.getElementById('dhPayEnabled_'+m.id).checked,name:document.getElementById('dhPayName_'+m.id).value.trim()||m.name,bank:document.getElementById('dhPayBank_'+m.id).value.trim(),beneficiary:document.getElementById('dhPayBeneficiary_'+m.id).value.trim(),account:document.getElementById('dhPayAccount_'+m.id).value.trim(),instruction:document.getElementById('dhPayInstruction_'+m.id).value.trim()})});
+    if(!methods.some(function(m){return m.enabled})){showToast('Activa al menos un método de pago.');return}
+    state.settings.payment.methods=methods;dhSavePays();await dhPersistPays();renderAdmin();showToast('Métodos de pago guardados.');
+  }
+  window.dhSavePaymentSettings=dhSavePaymentSettings;
+
+  const DH_LOAD_PAYMENT=loadPaymentSettings;
+  loadPaymentSettings=async function(){
+    await DH_LOAD_PAYMENT();
+    state.settings=state.settings||{};
+    state.settings.payment=state.settings.payment||{};
+    const remote=state.settings.theme?.dhPaymentMethods;
+    if(Array.isArray(remote)&&remote.length)state.settings.payment.methods=remote;
+    dhPays();
+  };
+  setTimeout(function(){loadPaymentSettings().then(function(){if(currentRemoteProfile()?.role==='admin'&&state.adminTab==='settings')renderAdmin()}).catch(function(){})},250);
 })();
 
 (function(){
