@@ -235,7 +235,15 @@ function productForm(p={}){return `<div class="formGrid"><div class="field"><lab
 function newProduct(){openModal('Nuevo producto',productForm())}
 function editProduct(id){const p=state.products.find(x=>x.id===id);openModal('Editar · '+p.name,productForm(p))}
 
-function deleteProduct(id){if(!confirm('¿Eliminar este producto del catálogo?'))return;state.products=state.products.filter(x=>x.id!==id);save();renderAdmin();renderStore();showToast('Producto eliminado.')}
+async function deleteProduct(id){
+  if(!confirm('¿Eliminar este producto del catálogo?'))return;
+  try{
+    const rows=await sbFetch('/rest/v1/products?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({active:false})});
+    if(!Array.isArray(rows)||!rows.length){showToast('No se pudo eliminar en el servidor. Revisa que tu sesión sea de administrador.');return}
+  }catch(e){showToast(e.message||'No se pudo eliminar el producto.');return}
+  state.products=state.products.filter(function(x){return String(x.id)!==String(id)});
+  save();renderAdmin();renderStore();showToast('Producto eliminado.');
+}
 function salesHTML(){const total=state.sales.reduce((s,x)=>s+Number(x.amount),0);return `<div class="adminTop"><div><h1>Ventas</h1><p>Historial de pedidos, clientes, montos y estados.</p></div><div class="adminActions"><button class="secondary" onclick="exportCSV()">↓ Exportar Excel/CSV</button></div></div><div class="metricGrid"><div class="metric"><span>Ingresos</span><strong>${money(total)}</strong></div><div class="metric"><span>Pedidos</span><strong>${state.sales.length}</strong></div><div class="metric"><span>Promedio por pedido</span><strong>${money(state.sales.length?total/state.sales.length:0)}</strong></div><div class="metric"><span>Aprobadas</span><strong>${state.sales.filter(s=>s.status==='Aprobada').length}</strong></div></div><div class="panel"><div class="panelHead"><div><h3>Registro de pedidos</h3><p>El botón de exportación genera un CSV compatible con Excel.</p></div></div><div class="panelBody tableWrap">${salesTable(state.sales)}</div></div>`}
 function editSale(displayIndex){showToast('Abre el pedido desde una implementación conectada a una base de datos para validar el comprobante y marcarlo como aprobado.')}function promosHTML(){return `<div class="adminTop"><div><h1>Promociones</h1><p>Crea campañas que aparezcan como tarjetas o botones en la tienda.</p></div><button class="primary" onclick="newPromo()">＋ Nueva promoción</button></div><div class="bannerGrid"><div class="bannerCard"><div class="bannerVisual"></div><div class="content"><h4>Promo de ejemplo · +10%</h4><p>Una tarjeta editable para mostrar eventos, descuentos, recargas especiales o mensajes importantes.</p><small>Activa · Botón: Ver promoción</small></div></div><div class="bannerCard"><div class="bannerVisual" style="background:linear-gradient(135deg,rgba(34,211,238,.16),transparent 65%)"></div><div class="content"><h4>Flyer destacado</h4><p>En la versión conectada puedes cargar una imagen desde tu computadora y elegir dónde mostrarla.</p><small>Imagen · Inicio</small></div></div></div><div class="panel" style="margin-top:12px"><div class="panelHead"><div><h3>Configuración de botones</h3><p>Ejemplo de campos que el administrador puede editar.</p></div></div><div class="panelBody"><div class="formGrid"><div class="field"><label>Texto del botón</label><input value="Comprar ahora"></div><div class="field"><label>Color / estilo</label><select><option>Principal</option><option>Secundario</option></select></div><div class="field"><label>Acción</label><select><option>Abrir producto</option><option>Abrir promoción</option><option>Abrir información</option></select></div><div class="field"><label>Posición</label><select><option>Inicio</option><option>Sección de promos</option></select></div></div><div class="formActions"><button class="primary" onclick="showToast('Cambios de ejemplo guardados.')">Guardar cambios</button></div></div></div>`}
 function newPromo(){openModal('Nueva promoción',`<div class="formGrid"><div class="field"><label>Título</label><input id="promoTitle" placeholder="Ej. Fin de semana x2"></div><div class="field"><label>Texto del botón</label><input id="promoBtn" value="Ver oferta"></div><div class="field"><label>Imagen / flyer</label><input id="promoImg" type="file" accept="image/*"></div><div class="field"><label>Estado</label><select id="promoStatus"><option>Activa</option><option>Oculta</option></select></div></div><div class="formActions"><button class="secondary" onclick="closeModal()">Cancelar</button><button class="primary" onclick="closeModal();showToast('Promoción de demo creada.')">Crear promoción</button></div>`)}
@@ -899,7 +907,7 @@ async function dhUploadPublicMedia(file,folder){
 
 async function loadProductsRemote(){
   const rows=await sbFetch('/rest/v1/products?select=id,name,category,kind,diamonds,price,tag,active,color,image_url&active=eq.true&order=id.asc');
-  if(rows&&rows.length){
+  if(Array.isArray(rows)){
     state.products=rows.map(function(p){return {id:p.id,name:p.name,category:p.category,kind:p.kind,diamonds:p.diamonds,price:Number(p.price),tag:p.tag,color:p.color||'',image_url:p.image_url||''}});
     localStorage.setItem('dh_products',JSON.stringify(state.products));
   }
@@ -1331,18 +1339,18 @@ setTimeout(function(){initRealtime()},600);
     if(document.getElementById('dhBlockImage'))b.imageUrl=document.getElementById('dhBlockImage').value.trim();
     if(b.type==='promo'&&b.button)b.button.label=(document.querySelector('[data-btn-label]')?.value||b.button.label);
     if(b.buttons)b.buttons=dhReadButtons();
-    dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque actualizado.');
+    dhPersistLayout(layout);closeModal();window.dhRenderPage();showToast('Bloque actualizado.');
   }
   function dhMoveBlock(id,d){
     const layout=dhLayout(),i=layout.blocks.findIndex(function(x){return x.id===id}),ni=i+d;if(i<0||ni<0||ni>=layout.blocks.length)return;
-    const x=layout.blocks[i];layout.blocks[i]=layout.blocks[ni];layout.blocks[ni]=x;dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque movido.');
+    const x=layout.blocks[i];layout.blocks[i]=layout.blocks[ni];layout.blocks[ni]=x;dhPersistLayout(layout);closeModal();window.dhRenderPage();showToast('Bloque movido.');
   }
-  function dhToggleBlock(id){const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===id});if(!b)return;b.visible=b.visible===false;dhPersistLayout(layout);closeModal();dhRenderPage()}
-  function dhDeleteBlock(id){const layout=dhLayout();layout.blocks=layout.blocks.filter(function(x){return x.id!==id});dhPersistLayout(layout);closeModal();dhRenderPage();showToast('Bloque eliminado.')}
+  function dhToggleBlock(id){const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===id});if(!b)return;b.visible=b.visible===false;dhPersistLayout(layout);closeModal();window.dhRenderPage()}
+  function dhDeleteBlock(id){const layout=dhLayout();layout.blocks=layout.blocks.filter(function(x){return x.id!==id});dhPersistLayout(layout);closeModal();window.dhRenderPage();showToast('Bloque eliminado.')}
   function dhAddSection(type){
     const isBanner=type==='banner',id='section-'+Date.now();
     const layout=dhLayout();layout.blocks.push({id:id,type:isBanner?'banner':'section',visible:true,title:isBanner?'Nuevo banner':'Nuevo apartado',description:'Escribe aquí el contenido de este espacio.',imageUrl:'',bgColor:'#111526',buttons:[{label:'Ir a paquetes',action:{type:'scroll',target:'packs'}}],styles:{}});
-    dhPersistLayout(layout);dhRenderPage();showToast(isBanner?'Banner creado.':'Apartado creado.');setTimeout(function(){dhOpenBlockEditor(id)},80);
+    dhPersistLayout(layout);window.dhRenderPage();showToast(isBanner?'Banner creado.':'Apartado creado.');setTimeout(function(){dhOpenBlockEditor(id)},80);
   }
   function dhEditorBar(){
     let bar=document.getElementById('dhInlineEditorBar');
@@ -1371,7 +1379,7 @@ setTimeout(function(){initRealtime()},600);
   }
   function dhReorderBlocks(from,to){
     const layout=dhLayout(),a=layout.blocks.findIndex(function(x){return x.id===from}),b=layout.blocks.findIndex(function(x){return x.id===to});if(a<0||b<0)return;
-    const x=layout.blocks.splice(a,1)[0];layout.blocks.splice(b,0,x);dhPersistLayout(layout);dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
+    const x=layout.blocks.splice(a,1)[0];layout.blocks.splice(b,0,x);dhPersistLayout(layout);window.dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
   }
   function dhOpenTextEditor(blockId,key){
     const b=dhFindBlock(blockId);if(!b)return;
@@ -1381,7 +1389,7 @@ setTimeout(function(){initRealtime()},600);
   function dhSaveTextEditor(blockId,key){
     const layout=dhLayout(),b=layout.blocks.find(function(x){return x.id===blockId});if(!b)return;
     b[key]=document.getElementById('dhInlineText').value;b.styles=b.styles||{};b.styles[key]={color:document.getElementById('dhInlineColor').value,fontFamily:document.getElementById('dhInlineFont').value,fontSize:Number(document.getElementById('dhInlineSize').value)||28,fontWeight:document.getElementById('dhInlineWeight').value,fontStyle:document.getElementById('dhInlineStyle').value};
-    dhPersistLayout(layout);closeModal();dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
+    dhPersistLayout(layout);closeModal();window.dhRenderPage();document.body.classList.add('dh-edit-mode');dhDecorateEditor();
   }
   function dhApplyBlockSizes(){
     const layout=dhLayout();
@@ -1430,13 +1438,13 @@ setTimeout(function(){initRealtime()},600);
     if(document.getElementById('dhBlockImage'))b.imageUrl=document.getElementById('dhBlockImage').value.trim();
     b.size={width:Math.max(20,Math.min(100,Number(document.getElementById('dhBlockWidth')?.value)||100)),height:Math.max(0,Number(document.getElementById('dhBlockHeight')?.value)||0),imageFit:document.getElementById('dhBlockFit')?.value||'cover'};
     if(b.buttons)b.buttons=dhReadButtons();
-    dhPersistLayout(layout);closeModal();dhRenderPage();dhApplyBlockSizes();showToast('Bloque actualizado.');
+    dhPersistLayout(layout);closeModal();window.dhRenderPage();dhApplyBlockSizes();showToast('Bloque actualizado.');
   }
 
   function dhAddSection(type){
     const isBanner=type==='banner',id='section-'+Date.now();
     const layout=dhLayout();layout.blocks.push({id:id,type:isBanner?'banner':'section',visible:true,title:isBanner?'Nuevo banner':'Nuevo apartado',description:'Escribe aquí el contenido de este espacio.',imageUrl:'',bgColor:'#111526',size:{width:isBanner?100:100,height:isBanner?300:220,imageFit:'cover'},buttons:[{label:'Ir a paquetes',action:{type:'scroll',target:'packs'}}],styles:{}});
-    dhPersistLayout(layout);dhRenderPage();dhApplyBlockSizes();showToast(isBanner?'Banner creado.':'Apartado creado.');setTimeout(function(){dhOpenBlockEditor(id)},80);
+    dhPersistLayout(layout);window.dhRenderPage();dhApplyBlockSizes();showToast(isBanner?'Banner creado.':'Apartado creado.');setTimeout(function(){dhOpenBlockEditor(id)},80);
   }
 
   const DH_ORIGINAL_RENDER_PAGE=dhRenderPage;
@@ -1460,7 +1468,7 @@ setTimeout(function(){initRealtime()},600);
   const DH_OLD_SHOW_ADMIN=showAdmin;
   showAdmin=function(){DH_OLD_SHOW_ADMIN();dhAdminEditorVisibility()};
   
-  renderStore=function(){dhRenderPage();refreshAccount()};
+  renderStore=function(){window.dhRenderPage();refreshAccount()};
   const originalLoadPayment=loadPaymentSettings;
   loadPaymentSettings=async function(){await originalLoadPayment();applyTheme();if(currentRemoteProfile()?.role==='admin')dhAdminEditorVisibility()};
   const originalApplyTheme=applyTheme;
@@ -1479,7 +1487,7 @@ setTimeout(function(){initRealtime()},600);
   window.dhAddSection=dhAddSection;
   window.dhRenderPage=dhRenderPage;
   window.dhAdminEditorVisibility=dhAdminEditorVisibility;
-  setTimeout(function(){dhRenderPage();refreshAccount();dhAdminEditorVisibility()},300);
+  setTimeout(function(){window.dhRenderPage();refreshAccount();dhAdminEditorVisibility()},300);
   window.dhEscape=dhEscape;
 })();
 
@@ -1635,9 +1643,10 @@ setTimeout(function(){initRealtime()},600);
       if(id!=='packs'){
         const filters=el.querySelector('.filters');if(filters)filters.style.display='none';
         grid.id='productGrid-'+id;
-        const cat=String(b.categoryFilter||'').trim().toLowerCase();
-        const products=cat?state.products.filter(function(p){return String(p.category||'').trim().toLowerCase()===cat}):state.products;
-        grid.innerHTML=products.map(productCardHTML).join('');
+        let cat=String(b.categoryFilter||'').trim().toLowerCase();
+        if(!cat){const byTitle=easyCategories().find(function(c){return String(c||'').trim().toLowerCase()===String(b.title||'').trim().toLowerCase()});if(byTitle)cat=String(byTitle).trim().toLowerCase()}
+        const products=cat?state.products.filter(function(p){return String(p.category||'').trim().toLowerCase()===cat}):[];
+        grid.innerHTML=products.length?products.map(productCardHTML).join(''):'<div class="empty" style="grid-column:1/-1">'+(cat?'Esta sección todavía no tiene productos de esta categoría.':'Esta sección aún no tiene categoría. Entra en modo edición, pulsa Editar en esta sección y elige la categoría.')+'</div>';
       }else{
         const filters=el.querySelector('.filters');if(filters)filters.id='categoryFilters';
       }
@@ -2230,11 +2239,12 @@ setTimeout(function(){initRealtime()},600);
       const id=el.getAttribute('data-dh-block'),b=layout.blocks.find(function(x){return x.id===id});
       if(!b||b.type!=='products'||id==='packs')return;
       const grid=el.querySelector('.productGrid');if(!grid)return;
-      const cat=qnorm(b.categoryFilter);
+      let cat=qnorm(b.categoryFilter);
+      if(!cat){const byTitle=qCategories().find(function(c){return qnorm(c)===qnorm(b.title)});if(byTitle)cat=qnorm(byTitle)}
       const products=cat?state.products.filter(function(p){return qnorm(p.category)===cat}):[];
       const filters=el.querySelector('.filters');if(filters)filters.style.display='none';
       grid.id='productGrid-'+id;
-      grid.innerHTML=products.length?products.map(productCardHTML).join(''):'<div class="empty" style="grid-column:1/-1">Esta sección todavía no tiene productos de esta categoría.</div>';
+      grid.innerHTML=products.length?products.map(productCardHTML).join(''):'<div class="empty" style="grid-column:1/-1">'+(cat?'Esta sección todavía no tiene productos de esta categoría.':'Esta sección aún no tiene categoría. Entra en modo edición, pulsa Editar en esta sección y elige la categoría.')+'</div>';
     });
     const packs=document.querySelector('[data-dh-block="packs"]'),grid=packs?.querySelector('.productGrid'),filters=packs?.querySelector('.filters');
     if(grid){
