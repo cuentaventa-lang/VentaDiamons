@@ -2409,6 +2409,55 @@ setTimeout(function(){initRealtime()},600);
   }).observe(document.body,{childList:true,subtree:true});
 })();
 
+
+(function(){
+  const lc=function(v){return String(v||'').trim().toLowerCase()};
+  const theme=function(){state.settings=state.settings||{};state.settings.theme=state.settings.theme||{};return state.settings.theme};
+  const st=document.createElement('style');
+  st.textContent='#dhPanelTab{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:9999;border:0;border-radius:12px 0 0 12px;padding:14px 8px;background:#6d38ed;color:#fff;font:800 12px Inter,Arial;cursor:pointer;writing-mode:vertical-rl;box-shadow:0 8px 24px rgba(0,0,0,.4)}body.dhPanelOff #dhEasyEditor,body.dhPanelOff .dhTb{display:none!important}#dhTop{position:fixed;left:16px;bottom:16px;z-index:9000;width:44px;height:44px;border:0;border-radius:50%;background:#6d38ed;color:#fff;font-size:18px;cursor:pointer;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}';
+  document.head.appendChild(st);
+  window.dhPanelToggle=function(){const off=localStorage.getItem('dh_panel_off')!=='1';localStorage.setItem('dh_panel_off',off?'1':'0');sync()};
+  function sync(){
+    const off=localStorage.getItem('dh_panel_off')==='1',p=document.getElementById('dhEasyEditor');
+    let admin=false;try{admin=currentRemoteProfile()?.role==='admin'}catch(_){}
+    const sv=document.getElementById('storeView'),show=admin&&p&&sv&&getComputedStyle(sv).display!=='none';
+    document.body.classList.toggle('dhPanelOff',!!(show&&off));
+    let t=document.getElementById('dhPanelTab');
+    if(!show){if(t)t.remove();return}
+    if(!t){t=document.createElement('button');t.id='dhPanelTab';t.type='button';t.onclick=window.dhPanelToggle;document.body.appendChild(t)}
+    t.textContent=off?'◂ Mostrar editor':'Ocultar editor ▸';
+    if(!off)t.style.right='';
+  }
+  setInterval(sync,700);
+  const up=document.createElement('button');up.id='dhTop';up.type='button';up.textContent='↑';up.onclick=function(){scrollTo({top:0,behavior:'smooth'})};
+  document.body.appendChild(up);
+  addEventListener('scroll',function(){up.style.display=scrollY>700?'block':'none'},{passive:true});
+  window.dhDelCat=async function(name){
+    if(lc(name)==='general')return;
+    const n=state.products.filter(function(p){return lc(p.category)===lc(name)}).length;
+    if(!confirm('¿Eliminar la categoría "'+name+'"?'+(n?' Sus '+n+' producto(s) pasarán a "General".':'')+' Su apartado también se quitará de la página.'))return;
+    try{
+      if(n){const r=await sbFetch('/rest/v1/products?category=eq.'+encodeURIComponent(name),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({category:'General'})});
+        if(!Array.isArray(r)||!r.length)throw new Error('El servidor no permitió el cambio. Entra como administrador.')}
+    }catch(e){showToast(e.message||'No se pudo eliminar la categoría.');return}
+    state.products.forEach(function(p){if(lc(p.category)===lc(name))p.category='General'});
+    localStorage.setItem('dh_products',JSON.stringify(state.products));
+    const t=theme();t.dhCategories=(t.dhCategories||[]).filter(function(c){return lc(c)!==lc(name)});
+    try{localStorage.setItem('dh_categories',JSON.stringify(JSON.parse(localStorage.getItem('dh_categories')||'[]').filter(function(c){return lc(c)!==lc(name)})))}catch(_){}
+    const l=easyLayout();
+    l.blocks=l.blocks.filter(function(b){return !(b.type==='products'&&b.id!=='packs'&&(lc(b.categoryFilter)===lc(name)||(!b.categoryFilter&&lc(b.title)===lc(name))))});
+    t.dhLayout=l;if(lc(state.category)===lc(name))state.category='';
+    easySaveTheme();easyRefresh();closeModal();window.dhEasyOpenCategories();showToast('Categoría eliminada.');
+  };
+  new MutationObserver(function(){
+    document.querySelectorAll('#modalBack button[data-cat]').forEach(function(b){
+      if(lc(b.dataset.cat)==='general'||(b.nextElementSibling&&b.nextElementSibling.classList.contains('dhDelCat')))return;
+      const d=document.createElement('button');d.type='button';d.className='iconBtn danger dhDelCat';d.textContent='🗑 Eliminar';
+      d.onclick=function(){window.dhDelCat(b.dataset.cat)};b.after(d);
+    });
+  }).observe(document.body,{childList:true,subtree:true});
+})();
+
 </script>
  </body>
  </html>
